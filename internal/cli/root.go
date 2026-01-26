@@ -33,12 +33,14 @@ func init() {
   rootCmd.SetHelpTemplate(fmt.Sprintf("%s\n\nDefault paths:\n  config: %s\n  session: %s\n  cache: %s\n  files: %s\n  export: %s\n", rootCmd.HelpTemplate(), config.ConfigPath(), config.SessionPath(), config.CacheDBPath(), config.FileCacheDir(), config.ExportDir()))
 
   rootCmd.AddCommand(
+    configCmd,
     loginCmd,
     coursesCmd,
     filesCmd,
     deadlinesCmd,
     downloadCmd,
     exportCmd,
+    printCmd,
   )
 }
 

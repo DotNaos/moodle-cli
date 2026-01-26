@@ -15,6 +15,7 @@ var filesCmd = &cobra.Command{
   Use:   "files <course-id>",
   Short: "List files for a course",
   Args:  cobra.ExactArgs(1),
+  ValidArgsFunction: completeCourseIDs,
   RunE: func(cmd *cobra.Command, args []string) error {
     session, err := moodle.LoadSession(opts.SessionPath)
     if err != nil {

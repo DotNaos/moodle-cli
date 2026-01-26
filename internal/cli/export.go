@@ -11,6 +11,9 @@ var exportFormat string
 var exportCmd = &cobra.Command{
   Use:   "export course <id>",
   Short: "Export a course",
+  ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+    return nil, cobra.ShellCompDirectiveNoFileComp
+  },
   Args:  cobra.MinimumNArgs(2),
   RunE: func(cmd *cobra.Command, args []string) error {
     if args[0] != "course" {

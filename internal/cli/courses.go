@@ -14,6 +14,9 @@ var coursesJSON bool
 var coursesCmd = &cobra.Command{
   Use:   "courses",
   Short: "List courses",
+  ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+    return nil, cobra.ShellCompDirectiveNoFileComp
+  },
   RunE: func(cmd *cobra.Command, args []string) error {
     session, err := moodle.LoadSession(opts.SessionPath)
     if err != nil {

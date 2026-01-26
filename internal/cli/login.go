@@ -5,6 +5,7 @@ import (
   "os"
   "time"
 
+  "github.com/DotNaos/moodle-cli/internal/config"
   "github.com/DotNaos/moodle-cli/internal/moodle"
   "github.com/spf13/cobra"
 )
@@ -19,6 +20,9 @@ var loginTimeout time.Duration
 var loginCmd = &cobra.Command{
   Use:   "login",
   Short: "Login via browser (SSO friendly)",
+  ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+    return nil, cobra.ShellCompDirectiveNoFileComp
+  },
   RunE: func(cmd *cobra.Command, args []string) error {
     if loginShowBrowser {
       loginHeadless = false
@@ -36,6 +40,22 @@ var loginCmd = &cobra.Command{
       password = os.Getenv("MOODLE_PASSWORD")
       if password == "" {
         password = os.Getenv("OS_STUDY_PASSWORD")
+      }
+    }
+
+    if username == "" || password == "" || loginSchool == "" {
+      cfg, err := config.LoadConfig(opts.ConfigPath)
+      if err != nil {
+        return err
+      }
+      if loginSchool == "" && cfg.SchoolID != "" {
+        loginSchool = cfg.SchoolID
+      }
+      if username == "" && cfg.Username != "" {
+        username = cfg.Username
+      }
+      if password == "" && cfg.Password != "" {
+        password = cfg.Password
       }
     }
 
