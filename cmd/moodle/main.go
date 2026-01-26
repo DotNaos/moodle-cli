@@ -1,12 +1,13 @@
 package main
 
 import (
-  "fmt"
   "os"
+
+  "github.com/DotNaos/moodle-cli/internal/cli"
 )
 
 func main() {
-  // placeholder CLI entrypoint
-  fmt.Println("moodle-cli (scaffold)")
-  os.Exit(0)
+  if err := cli.Execute(); err != nil {
+    os.Exit(1)
+  }
 }
