@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -17,18 +16,8 @@ var printCmd = &cobra.Command{
 	Args:              cobra.ExactArgs(2),
 	ValidArgsFunction: completeCourseOrResourceIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		session, err := moodle.LoadSession(opts.SessionPath)
+		client, err := ensureAuthenticatedClient()
 		if err != nil {
-			return fmt.Errorf("load session: %w", err)
-		}
-		client, err := moodle.NewClient(session)
-		if err != nil {
-			return err
-		}
-		if err := client.ValidateSession(); err != nil {
-			if errors.Is(err, moodle.ErrSessionExpired) {
-				return fmt.Errorf("session expired, please run 'moodle login' again")
-			}
 			return err
 		}
 
