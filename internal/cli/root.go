@@ -37,7 +37,7 @@ func init() {
     loginCmd,
     coursesCmd,
     filesCmd,
-    deadlinesCmd,
+    timetableCmd,
     downloadCmd,
     exportCmd,
     printCmd,

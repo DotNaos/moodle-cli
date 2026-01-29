@@ -4,7 +4,7 @@ CLI for FHGR Moodle with caching, course exports, and file downloads.
 
 ## Goals
 - Login via Playwright (SSO‑friendly)
-- List courses, files, deadlines
+- List courses, files, timetable events
 - Cache Moodle tree in SQLite
 - Cache downloads and avoid re‑downloading
 - Export full course (zip or file tree)
@@ -20,7 +20,7 @@ CLI for FHGR Moodle with caching, course exports, and file downloads.
 - `moodle login`
 - `moodle courses --json`
 - `moodle files <course-id> --json`
-- `moodle deadlines --json`
+- `moodle timetable --json`
 - `moodle download course <id> --zip|--files`
 - `moodle export course <id> --format=folder|zip`
 
