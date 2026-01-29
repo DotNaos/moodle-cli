@@ -24,5 +24,12 @@ CLI for FHGR Moodle with caching, course exports, and file downloads.
 - `moodle download course <id> --zip|--files`
 - `moodle export course <id> --format=folder|zip`
 
+## Skill (moodle-cli)
+This repo bundles a Clawdbot skill at:
+- `skills/moodle-cli`
+
+**Install via skills.sh**
+- `skills.sh` expects the structure `root/skills/<skill>`. Point it at `./skills/moodle-cli`.
+
 ## Status
 Scaffold in progress.
