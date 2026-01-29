@@ -20,6 +20,8 @@ var loginTimeout time.Duration
 var loginCmd = &cobra.Command{
   Use:   "login",
   Short: "Login via browser (SSO friendly)",
+  // TODO: Auto-run login once when a session is expired and a command requires auth,
+  // then retry the original command (avoid loops; only retry once).
   ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
     return nil, cobra.ShellCompDirectiveNoFileComp
   },
