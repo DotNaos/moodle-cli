@@ -16,8 +16,10 @@ var loginShowBrowser bool
 var loginTimeout time.Duration
 
 var loginCmd = &cobra.Command{
-	Use:   "login",
-	Short: "Login via browser (SSO friendly)",
+	Use:     "login",
+	Short:   "Login via browser and store a session",
+	Long:    "Open a browser to log in with your Moodle username and password.\nThe session cookie is saved and reused for future commands.\n\nCredentials can be provided via flags, config, or environment variables:\n  MOODLE_USERNAME / MOODLE_PASSWORD\n  OS_STUDY_USERNAME / OS_STUDY_PASSWORD",
+	Example: "  moodle login --school fhgr --username you@example.com --password \"secret\"\n  moodle login --show-browser",
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
@@ -58,4 +60,6 @@ func init() {
 	loginCmd.Flags().StringVar(&loginPassword, "password", "", "Password for login")
 	loginCmd.Flags().BoolVar(&loginShowBrowser, "show-browser", false, "Show browser window (non-headless)")
 	loginCmd.Flags().DurationVar(&loginTimeout, "timeout", 120*time.Second, "Login timeout")
+
+	loginCmd.RegisterFlagCompletionFunc("school", completeSchoolIDs)
 }

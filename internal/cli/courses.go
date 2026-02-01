@@ -10,8 +10,10 @@ import (
 var coursesJSON bool
 
 var coursesCmd = &cobra.Command{
-	Use:   "courses",
-	Short: "List courses",
+	Use:     "courses",
+	Short:   "List your enrolled courses",
+	Long:    "List all courses you are enrolled in.\n\nBy default, the output is a table: course ID, full name, and category.\nUse --json to return the full course objects.",
+	Example: "  moodle list courses\n  moodle list courses --json",
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},

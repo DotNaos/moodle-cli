@@ -11,17 +11,22 @@ import (
 var printRaw bool
 
 var printCmd = &cobra.Command{
-	Use:               "print <course-id|name> <resource-id|name>",
-	Short:             "Print file contents (PDFs extracted to text)",
-	Args:              cobra.ExactArgs(2),
-	ValidArgsFunction: completeCourseOrResourceIDs,
+	Use:               "print course <course-id|name> <resource-id|name>",
+	Short:             "Print file contents to stdout (PDFs extracted to text)",
+	Long:              "Print a single file's contents to stdout.\n\nThe course and file can be specified by ID or name.\nPDFs are converted to text; use --raw to skip cleanup.",
+	Example:           "  moodle print course 12345 67890\n  moodle print course \"Mathematik II (cds-402) FS25\" \"Übungsblatt Analysis 1\"",
+	Args:              cobra.ExactArgs(3),
+	ValidArgsFunction: completePrintCourseFile,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if args[0] != "course" {
+			return fmt.Errorf("expected 'course' subcommand")
+		}
 		client, err := ensureAuthenticatedClient()
 		if err != nil {
 			return err
 		}
 
-		courseID, err := resolveCourseID(client, args[0])
+		courseID, err := resolveCourseID(client, args[1])
 		if err != nil {
 			return err
 		}
@@ -29,7 +34,7 @@ var printCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		target, err := resolveResource(resources, args[1])
+		target, err := resolveResource(resources, args[2])
 		if err != nil {
 			return err
 		}

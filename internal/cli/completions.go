@@ -56,11 +56,7 @@ func completeCourseIDs(cmd *cobra.Command, args []string, toComplete string) ([]
 	return out, cobra.ShellCompDirectiveNoFileComp
 }
 
-func completeCourseOrResourceIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	if len(args) == 0 {
-		return completeCourseIDs(cmd, args, toComplete)
-	}
-
+func completeResourcesForCourseArg(courseArg string) ([]string, cobra.ShellCompDirective) {
 	session, err := moodle.LoadSession(opts.SessionPath)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
@@ -81,7 +77,7 @@ func completeCourseOrResourceIDs(cmd *cobra.Command, args []string, toComplete s
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	courseID, err := resolveCourseIDFromCourses(courses, args[0])
+	courseID, err := resolveCourseIDFromCourses(courses, courseArg)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -125,4 +121,48 @@ func formatCompValue(value string, desc string) string {
 		return value
 	}
 	return value + "\t" + desc
+}
+
+func completeDownloadFile(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+	if len(args) == 0 {
+		return []string{formatCompValue("file", "Download a file")}, cobra.ShellCompDirectiveNoFileComp
+	}
+	if len(args) == 1 && args[0] == "file" {
+		return completeCourseIDs(nil, nil, "")
+	}
+	if len(args) == 2 && args[0] == "file" {
+		return completeResourcesForCourseArg(args[1])
+	}
+	return nil, cobra.ShellCompDirectiveNoFileComp
+}
+
+func completePrintCourseFile(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+	if len(args) == 0 {
+		return []string{formatCompValue("course", "Print a file from a course")}, cobra.ShellCompDirectiveNoFileComp
+	}
+	if len(args) == 1 && args[0] == "course" {
+		return completeCourseIDs(nil, nil, "")
+	}
+	if len(args) == 2 && args[0] == "course" {
+		return completeResourcesForCourseArg(args[1])
+	}
+	return nil, cobra.ShellCompDirectiveNoFileComp
+}
+
+func completeExportCourse(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+	if len(args) == 0 {
+		return []string{formatCompValue("course", "Export a course")}, cobra.ShellCompDirectiveNoFileComp
+	}
+	if len(args) == 1 && args[0] == "course" {
+		return completeCourseIDs(nil, nil, "")
+	}
+	return nil, cobra.ShellCompDirectiveNoFileComp
+}
+
+func completeSchoolIDs(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+	out := make([]string, 0, len(moodle.Schools))
+	for _, s := range moodle.Schools {
+		out = append(out, formatCompValue(s.ID, s.Name))
+	}
+	return out, cobra.ShellCompDirectiveNoFileComp
 }

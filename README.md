@@ -26,6 +26,7 @@ npx skills add DotNaos/moodle-cli
 6. Configure credentials:
 ```sh
 moodle config set \
+  --school <school-id> \
   --username <email> \
   --password <password> \
   --calendar-url <ics-url>
@@ -37,7 +38,11 @@ moodle login
 ```
 8. List courses:
 ```sh
-moodle courses --json
+moodle list courses --json
+```
+9. List files in a course:
+```sh
+moodle list files <course-id|name> --json
 ```
 
 ### Zsh completion
@@ -48,7 +53,7 @@ source <(moodle completion zsh)
 ```
 
 ## Goals
-- Login via Playwright (SSO‑friendly)
+- Login via Playwright with username/password
 - List courses, files, timetable events
 - Cache Moodle tree in SQLite
 - Cache downloads and avoid re‑downloading
@@ -59,15 +64,17 @@ source <(moodle completion zsh)
 - Session cookies: `~/.moodle-cli/session.json`
 - SQLite cache: `~/.moodle-cli/cache.db`
 - File cache: `~/.moodle-cli/files/`
-- Export: `~/Downloads/moodle/`
+- Output: `~/Downloads/moodle/`
 
-## Planned Commands
+## Commands
 - `moodle login`
-- `moodle courses --json`
-- `moodle files <course-id> --json`
-- `moodle timetable --json`
-- `moodle download course <id> --zip|--files`
-- `moodle export course <id> --format=folder|zip`
+- `moodle list courses --json`
+- `moodle list files <course-id|name> --json`
+- `moodle list timetable --json`
+- `moodle download file <course-id|name> <resource-id|name> --output-dir <path>`
+- `moodle download file <course-id|name> --all --output-dir <path>`
+- `moodle export course <course-id|name> --output-dir <path>`
+- `moodle print course <course-id|name> <resource-id|name>`
 
 ## Skill (moodle-cli)
 - Path: `skills/moodle-cli`

@@ -27,33 +27,34 @@ Use the local Moodle CLI to login, list courses, files, and export/download cour
 
 - Use when asked about enrolled courses, course IDs, or to confirm a course exists.
 - Command:
-    - `moodle courses --json`
+    - `moodle list courses --json`
 
 ### List files for a course
 
 - Use when asked about course materials, handouts, slides, or file lists.
 - Command:
-    - `moodle files <course-id> --json`
+    - `moodle list files <course-id|name> --json`
 
 ### Print file contents
 
 - Use when asked to extract text from a specific file (PDFs supported).
 - Command:
-    - `moodle print <file-id>`
+    - `moodle print course <course-id|name> <resource-id|name>`
 
 ### Timetable (lectures)
 
 - Use when asked about lecture times or next week’s schedule (this does NOT show exam deadlines).
 - Command:
-    - `moodle timetable --json`
+    - `moodle list timetable --json`
 - Flags: `--days <n>`, `--next-week`, `--unique`
 
 ### Download or export course
 
 - Use when asked to download all files or export a full course.
 - Commands:
-    - `moodle download course <id> --zip|--files`
-    - `moodle export course <id> --format=folder|zip`
+    - `moodle download file <course-id|name> <resource-id|name> --output-dir <path>`
+    - `moodle download file <course-id|name> --all --output-dir <path>`
+    - `moodle export course <course-id|name> --output-dir <path>`
 
 ## Resources
 
