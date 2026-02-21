@@ -60,5 +60,5 @@ Use the local Moodle CLI to login, list courses, files, and export/download cour
 
 ### references/
 
-- `moodle-cli.md`: Quick command and data-location reference for the CLI.
-- `timetable.md`: Timetable command reference.
+- `skills/moodle-cli/references/moodle-cli.md`: Quick command and data-location reference for the CLI.
+- `skills/moodle-cli/references/timetable.md`: Timetable command reference.
