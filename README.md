@@ -27,7 +27,7 @@ npx skills add DotNaos/moodle-cli
 ```sh
 moodle config set \
   --school <school-id> \
-  --username <email> \
+  --username <username> \
   --password <password> \
   --calendar-url <ics-url>
 ```
@@ -36,6 +36,7 @@ Note: `--calendar-url` is optional (only needed for timetable).
 ```sh
 moodle login
 ```
+On first login, the CLI automatically installs the required Playwright driver and Chromium runtime.
 8. List courses:
 ```sh
 moodle list courses --json
