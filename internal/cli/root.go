@@ -36,6 +36,7 @@ func init() {
 		configCmd,
 		loginCmd,
 		listCmd,
+		openCmd,
 		downloadCmd,
 		exportCmd,
 		printCmd,

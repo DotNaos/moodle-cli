@@ -12,8 +12,8 @@ var printRaw bool
 
 var printCmd = &cobra.Command{
 	Use:               "print course <course-id|name> <resource-id|name>",
-	Short:             "Print file contents to stdout (PDFs extracted to text)",
-	Long:              "Print a single file's contents to stdout.\n\nThe course and file can be specified by ID or name.\nPDFs are converted to text; use --raw to skip cleanup.",
+	Short:             "Print file contents to stdout (PDFs use OCR fallback)",
+	Long:              "Print a single file's contents to stdout.\n\nThe course and file can be specified by ID or name.\nPDFs are converted to text and automatically fall back to OCR when native extraction looks poor.\nUse --raw to skip cleanup.",
 	Example:           "  moodle print course 12345 67890\n  moodle print course \"Mathematik II (cds-402) FS25\" \"Übungsblatt Analysis 1\"",
 	Args:              cobra.ExactArgs(3),
 	ValidArgsFunction: completePrintCourseFile,

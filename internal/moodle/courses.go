@@ -13,6 +13,7 @@ type Course struct {
   Shortname string `json:"shortname"`
   Category  string `json:"category"`
   ViewURL   string `json:"viewUrl"`
+  HeroImage string `json:"heroImage"`
 }
 
 type moodleAPICourse struct {
@@ -21,6 +22,7 @@ type moodleAPICourse struct {
   Shortname      string `json:"shortname"`
   CourseCategory string `json:"coursecategory"`
   ViewURL        string `json:"viewurl"`
+  CourseImage    string `json:"courseimage"`
 }
 
 type moodleAPIData struct {
@@ -62,6 +64,7 @@ func (c *Client) FetchCourses() ([]Course, error) {
           "id",
           "fullname",
           "shortname",
+          "courseimage",
           "showcoursecategory",
           "showshortname",
           "visible",
@@ -110,6 +113,7 @@ func (c *Client) FetchCourses() ([]Course, error) {
       Shortname: course.Shortname,
       Category:  course.CourseCategory,
       ViewURL:   course.ViewURL,
+      HeroImage: course.CourseImage,
     })
   }
 

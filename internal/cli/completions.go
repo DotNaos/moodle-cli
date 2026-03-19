@@ -149,6 +149,26 @@ func completePrintCourseFile(_ *cobra.Command, args []string, _ string) ([]strin
 	return nil, cobra.ShellCompDirectiveNoFileComp
 }
 
+func completeOpenResourceArgs(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+	if len(args) == 0 {
+		return completeCourseIDs(nil, nil, "")
+	}
+	if len(args) == 1 {
+		return completeResourcesForCourseArg(args[0])
+	}
+	return nil, cobra.ShellCompDirectiveNoFileComp
+}
+
+func completeOpenTargets(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+	if len(args) > 0 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	return []string{
+		formatCompValue("course", "Open a course"),
+		formatCompValue("resource", "Open a resource"),
+	}, cobra.ShellCompDirectiveNoFileComp
+}
+
 func completeExportCourse(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 	if len(args) == 0 {
 		return []string{formatCompValue("course", "Export a course")}, cobra.ShellCompDirectiveNoFileComp
