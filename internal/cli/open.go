@@ -2,6 +2,8 @@ package cli
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/DotNaos/moodle-cli/internal/config"
@@ -11,13 +13,17 @@ import (
 
 var openCurrentLectureWorkspace string
 var openCurrentLectureAt string
+var moodleDownloadFileToBuffer = func(client *moodle.Client, url string) (moodle.DownloadResult, error) {
+	return client.DownloadFileToBuffer(url)
+}
 
 var openCmd = &cobra.Command{
 	Use:     "open [course] [resource]",
 	Short:   "Open a course or resource in your browser",
 	Long:    "Open Moodle courses or resources in your default browser.\n\nUse either the existing subcommands or direct selectors such as `moodle open current current`.",
-	Example: "  moodle open current current\n  moodle open 0 0\n  moodle open resource 12345 67890",
+	Example: "  moodle open current current\n  moodle open current-resource\n  moodle open 0 0\n  moodle open resource 12345 67890",
 	Args: func(cmd *cobra.Command, args []string) error {
+		args = expandSingleCurrentAlias(args)
 		if len(args) == 0 {
 			return nil
 		}
@@ -28,6 +34,7 @@ var openCmd = &cobra.Command{
 	},
 	ValidArgsFunction: completeOpenDirectArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		args = expandSingleCurrentAlias(args)
 		if len(args) == 0 {
 			return cmd.Help()
 		}
@@ -95,11 +102,7 @@ var openResourceCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		if strings.TrimSpace(target.URL) == "" {
-			return fmt.Errorf("resource %s has no URL", target.ID)
-		}
-
-		return openURL(target.URL)
+		return openResolvedResource(client, *target)
 	},
 }
 
@@ -136,6 +139,16 @@ var openCurrentLectureCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		if result.Material != nil && strings.TrimSpace(result.Material.URL) != "" {
+			resource := moodle.Resource{
+				ID:       result.Material.ID,
+				Name:     result.Material.Label,
+				URL:      result.Material.URL,
+				Type:     "resource",
+				FileType: result.Material.FileType,
+			}
+			return openResolvedResource(client, resource)
+		}
 		target, err := currentLectureOpenTarget(result)
 		if err != nil {
 			return err
@@ -171,10 +184,7 @@ func runOpenResourceSelection(courseArg string, resourceArg string) error {
 	if err != nil {
 		return err
 	}
-	if strings.TrimSpace(target.URL) == "" {
-		return fmt.Errorf("resource %s has no URL", target.ID)
-	}
-	return openURL(target.URL)
+	return openResolvedResource(client, *target)
 }
 
 func currentLectureOpenTarget(result currentLectureResult) (string, error) {
@@ -197,4 +207,34 @@ func findCourseByID(courses []moodle.Course, courseID string) (*moodle.Course, e
 		}
 	}
 	return nil, fmt.Errorf("course not found: %s", courseID)
+}
+
+func openResolvedResource(client *moodle.Client, resource moodle.Resource) error {
+	if strings.TrimSpace(resource.URL) == "" {
+		return fmt.Errorf("resource %s has no URL", resource.ID)
+	}
+	if resource.Type != "resource" {
+		return openURL(resource.URL)
+	}
+	path, err := downloadResourceToTempFile(client, resource)
+	if err != nil {
+		return err
+	}
+	return openURL(path)
+}
+
+func downloadResourceToTempFile(client *moodle.Client, resource moodle.Resource) (string, error) {
+	result, err := moodleDownloadFileToBuffer(client, resource.URL)
+	if err != nil {
+		return "", err
+	}
+	tempDir, err := os.MkdirTemp("", "moodle-open-*")
+	if err != nil {
+		return "", err
+	}
+	path := filepath.Join(tempDir, buildResourceFilename(resource))
+	if err := os.WriteFile(path, result.Data, 0o644); err != nil {
+		return "", err
+	}
+	return path, nil
 }

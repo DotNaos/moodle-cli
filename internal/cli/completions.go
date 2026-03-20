@@ -154,7 +154,13 @@ func completeDownloadFile(_ *cobra.Command, args []string, _ string) ([]string, 
 
 func completePrintCourseFile(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 	if len(args) == 0 {
-		return completeCourseIDs(nil, nil, "")
+		results, directive := completeCourseIDs(nil, nil, "")
+		prefixed := []string{
+			formatCompValue("current-course", "Current lecture and current material"),
+			formatCompValue("current-resource", "Current lecture and current material"),
+			formatCompValue("current-ressource", "Current lecture and current material"),
+		}
+		return append(prefixed, results...), directive
 	}
 	if len(args) == 1 {
 		return completeResourcesForCourseArg(args[0])
@@ -169,6 +175,9 @@ func completeListSelectionArgs(_ *cobra.Command, args []string, _ string) ([]str
 			formatCompValue("courses", "List courses"),
 			formatCompValue("files", "List files in a course"),
 			formatCompValue("timetable", "List timetable entries"),
+			formatCompValue("current-course", "Current lecture and current material"),
+			formatCompValue("current-resource", "Current lecture and current material"),
+			formatCompValue("current-ressource", "Current lecture and current material"),
 		}
 		return append(prefixed, results...), directive
 	}
@@ -184,6 +193,9 @@ func completeOpenDirectArgs(_ *cobra.Command, args []string, _ string) ([]string
 		prefixed := []string{
 			formatCompValue("course", "Open a course"),
 			formatCompValue("resource", "Open a resource"),
+			formatCompValue("current-resource", "Open the current lecture material"),
+			formatCompValue("current-course", "Open the current lecture material"),
+			formatCompValue("current-ressource", "Open the current lecture material"),
 		}
 		return append(prefixed, results...), directive
 	}

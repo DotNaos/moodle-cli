@@ -19,8 +19,9 @@ var printCmd = &cobra.Command{
 	Short:            "Print Moodle content to stdout",
 	Long:             "Print Moodle content to stdout.\n\nUse either the existing subcommands or direct selectors such as `moodle print current current`.",
 	TraverseChildren: true,
-	Example:          "  moodle print current current\n  moodle print 0 0\n  moodle print course 12345 67890",
+	Example:          "  moodle print current current\n  moodle print current-course\n  moodle print current-resource\n  moodle print 0 0\n  moodle print course 12345 67890",
 	Args: func(cmd *cobra.Command, args []string) error {
+		args = expandSingleCurrentAlias(args)
 		if len(args) == 0 {
 			return nil
 		}
@@ -31,6 +32,7 @@ var printCmd = &cobra.Command{
 	},
 	ValidArgsFunction: completePrintCourseFile,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		args = expandSingleCurrentAlias(args)
 		if len(args) == 0 {
 			return cmd.Help()
 		}

@@ -91,3 +91,21 @@ func TestParentCommandsAcceptDirectSelectors(t *testing.T) {
 		}
 	}
 }
+
+func TestExpandSingleCurrentAlias(t *testing.T) {
+	tests := []struct {
+		input []string
+		want  []string
+	}{
+		{input: []string{"current-course"}, want: []string{"current", "current"}},
+		{input: []string{"current-resource"}, want: []string{"current", "current"}},
+		{input: []string{"current-ressource"}, want: []string{"current", "current"}},
+	}
+
+	for _, tt := range tests {
+		got := expandSingleCurrentAlias(tt.input)
+		if len(got) != 2 || got[0] != tt.want[0] || got[1] != tt.want[1] {
+			t.Fatalf("input %v expected %v, got %v", tt.input, tt.want, got)
+		}
+	}
+}

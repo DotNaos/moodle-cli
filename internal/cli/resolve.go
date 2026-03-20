@@ -205,6 +205,18 @@ func isCurrentSelector(value string) bool {
 	return strings.EqualFold(trimmed, "current") || trimmed == "0"
 }
 
+func expandSingleCurrentAlias(args []string) []string {
+	if len(args) != 1 {
+		return args
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "current", "current-course", "current-resource", "current-ressource":
+		return []string{"current", "current"}
+	default:
+		return args
+	}
+}
+
 func fileResources(resources []moodle.Resource) []moodle.Resource {
 	files := make([]moodle.Resource, 0, len(resources))
 	for _, resource := range resources {

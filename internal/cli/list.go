@@ -15,8 +15,9 @@ var listCmd = &cobra.Command{
 	Use:     "list [course] [resource]",
 	Short:   "List courses, files, or timetable entries",
 	Long:    "List data from Moodle.\n\nUse either the subcommands or a course/resource selector pair such as `moodle list current current`.",
-	Example: "  moodle list courses\n  moodle list files 12345\n  moodle list timetable\n  moodle list current current\n  moodle list 0 0",
+	Example: "  moodle list courses\n  moodle list files 12345\n  moodle list timetable\n  moodle list current current\n  moodle list current-course\n  moodle list 0 0",
 	Args: func(cmd *cobra.Command, args []string) error {
+		args = expandSingleCurrentAlias(args)
 		if len(args) == 0 {
 			return nil
 		}
@@ -29,6 +30,7 @@ var listCmd = &cobra.Command{
 		return completeListSelectionArgs(nil, nil, "")
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		args = expandSingleCurrentAlias(args)
 		if len(args) == 0 {
 			return cmd.Help()
 		}
