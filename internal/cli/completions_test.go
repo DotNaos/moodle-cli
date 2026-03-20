@@ -93,9 +93,9 @@ func TestCompleteDownloadFile(t *testing.T) {
 			expectContains: "file",
 		},
 		{
-			name:        "after file and course, returns empty",
-			args:        []string{"file", "123"},
-			expectEmpty: true,
+			name:           "after file and course, returns current selector",
+			args:           []string{"file", "123"},
+			expectContains: "current",
 		},
 	}
 
@@ -211,6 +211,25 @@ func TestCompleteOpenResourceArgs(t *testing.T) {
 	}
 }
 
+func TestCompleteCourseIDsIncludesCurrentSelectors(t *testing.T) {
+	results, directive := completeCourseIDs(nil, nil, "")
+	if directive != cobra.ShellCompDirectiveNoFileComp {
+		t.Fatalf("expected no-file-comp directive, got %v", directive)
+	}
+	for _, want := range []string{"current", "0"} {
+		found := false
+		for _, result := range results {
+			if len(result) >= len(want) && result[:len(want)] == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected %q in course completions, got %v", want, results)
+		}
+	}
+}
+
 func TestBrowserOpenCommand(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -306,10 +325,12 @@ func TestResolveResourceReturnsURL(t *testing.T) {
 func TestValidArgsForCommandsWithPositionalArgs(t *testing.T) {
 	// Commands that accept positional args must have ValidArgsFunction
 	commandsWithArgs := []*cobra.Command{
+		listCmd,
 		filesCmd,    // list files <course-id|name>
 		printCmd,    // print course <course-id|name> <resource-id|name>
 		downloadCmd, // download file <course-id|name> <resource-id|name>
 		exportCmd,   // export course <course-id|name>
+		openCmd,
 		openCourseCmd,
 		openResourceCmd,
 	}

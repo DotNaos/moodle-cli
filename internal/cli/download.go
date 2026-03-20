@@ -14,10 +14,10 @@ var downloadAll bool
 var downloadOutputDir string
 
 var downloadCmd = &cobra.Command{
-	Use:               "download file <course-id|name> <resource-id|name>",
+	Use:               "download file <course-id|name|current|0> <resource-id|name|current|0>",
 	Short:             "Download a file from a course",
-	Long:              "Download one or more files from a course to your filesystem.\n\nUse --all to download all files in the course. The course and file can be specified by ID or name.",
-	Example:           "  moodle download file 12345 67890\n  moodle download file 12345 --all -o ./downloads",
+	Long:              "Download one or more files from a course to your filesystem.\n\nUse --all to download all files in the course. The course and file can be specified by ID, name, `current`, `0`, or a positive index.",
+	Example:           "  moodle download file 12345 67890\n  moodle download file current current\n  moodle download file 0 0\n  moodle download file 12345 --all -o ./downloads",
 	ValidArgsFunction: completeDownloadFile,
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) < 2 {
@@ -43,7 +43,7 @@ var downloadCmd = &cobra.Command{
 			return err
 		}
 
-		courseID, err := resolveCourseID(client, args[1])
+		courseID, err := resolveCourseIDWithOptions(client, args[1], selectorOptions{})
 		if err != nil {
 			return err
 		}
@@ -56,7 +56,7 @@ var downloadCmd = &cobra.Command{
 			return downloadAllResources(client, resources, downloadOutputDir)
 		}
 
-		target, err := resolveResource(resources, args[2])
+		target, err := resolveResourceWithOptions(client, courseID, resources, args[2], selectorOptions{})
 		if err != nil {
 			return err
 		}

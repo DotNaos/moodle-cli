@@ -43,6 +43,9 @@ func ExtractPDFText(data []byte) (string, error) {
 }
 
 func extractPDFTextNative(data []byte) (string, error) {
+	if text, err := extractPDFTextWithPdftotext(data); err == nil && strings.TrimSpace(text) != "" {
+		return text, nil
+	}
 	reader := bytes.NewReader(data)
 	r, err := pdf.NewReader(reader, int64(len(data)))
 	if err != nil {
@@ -57,6 +60,37 @@ func extractPDFTextNative(data []byte) (string, error) {
 		return "", err
 	}
 	return buf.String(), nil
+}
+
+func extractPDFTextWithPdftotext(data []byte) (string, error) {
+	if _, err := exec.LookPath("pdftotext"); err != nil {
+		return "", fmt.Errorf("pdftotext not found in PATH")
+	}
+
+	tempDir, err := os.MkdirTemp("", "moodle-cli-pdftotext-*")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(tempDir)
+
+	pdfPath := filepath.Join(tempDir, "input.pdf")
+	outPath := filepath.Join(tempDir, "output.txt")
+	if err := os.WriteFile(pdfPath, data, 0o600); err != nil {
+		return "", err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	_, stderr, err := runExternalCommand(ctx, "pdftotext", "-layout", pdfPath, outPath)
+	if err != nil {
+		return "", fmt.Errorf("pdftotext failed: %w (%s)", err, stderr)
+	}
+	output, err := os.ReadFile(outPath)
+	if err != nil {
+		return "", err
+	}
+	return string(output), nil
 }
 
 func extractPDFTextOCR(data []byte) (string, error) {

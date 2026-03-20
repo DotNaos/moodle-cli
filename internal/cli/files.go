@@ -10,10 +10,10 @@ import (
 var filesJSON bool
 
 var filesCmd = &cobra.Command{
-	Use:               "files <course-id|name>",
+	Use:               "files <course-id|name|current|0>",
 	Short:             "List files and folders in a course",
-	Long:              "List all files and folders for a course.\n\nThe course can be specified by ID or name. Output includes resource ID, type, name, and section.",
-	Example:           "  moodle list files 12345\n  moodle list files \"Mathematik II (cds-402) FS25\"\n  moodle list files 12345 --json",
+	Long:              "List all files and folders for a course.\n\nThe course can be specified by ID, name, `current`, `0`, or a positive index. Output includes resource ID, type, name, and section.",
+	Example:           "  moodle list files 12345\n  moodle list files current\n  moodle list files 0\n  moodle list files 12345 --json",
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: completeCourseIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -22,7 +22,7 @@ var filesCmd = &cobra.Command{
 			return err
 		}
 
-		courseID, err := resolveCourseID(client, args[0])
+		courseID, err := resolveCourseIDWithOptions(client, args[0], selectorOptions{})
 		if err != nil {
 			return err
 		}

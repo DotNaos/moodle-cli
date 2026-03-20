@@ -14,10 +14,10 @@ import (
 var exportOutputDir string
 
 var exportCmd = &cobra.Command{
-	Use:               "export course <course-id|name>",
+	Use:               "export course <course-id|name|current|0>",
 	Short:             "Export an entire course as a zip archive",
-	Long:              "Export all files from a course into a zip archive.\n\nFiles are organized by section name inside the archive.",
-	Example:           "  moodle export course 12345\n  moodle export course \"Mathematik II (cds-402) FS25\" -o ./course.zip",
+	Long:              "Export all files from a course into a zip archive.\n\nFiles are organized by section name inside the archive. The course can be specified by ID, name, `current`, `0`, or a positive index.",
+	Example:           "  moodle export course 12345\n  moodle export course current -o ./course.zip\n  moodle export course 0 -o ./course.zip",
 	ValidArgsFunction: completeExportCourse,
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 2 {
@@ -34,11 +34,11 @@ var exportCmd = &cobra.Command{
 			return err
 		}
 
-		courses, err := client.FetchCourses()
+		courseID, err := resolveCourseIDWithOptions(client, args[1], selectorOptions{})
 		if err != nil {
 			return err
 		}
-		courseID, err := resolveCourseIDFromCourses(courses, args[1])
+		courses, err := client.FetchCourses()
 		if err != nil {
 			return err
 		}

@@ -43,12 +43,13 @@ moodle list courses --json
 ```
 9. List files in a course:
 ```sh
-moodle list files <course-id|name> --json
+moodle list files <course-id|name|current|0> --json
 ```
 10. Open a course or resource in your browser:
 ```sh
-moodle open course <course-id|name>
-moodle open resource <course-id|name> <resource-id|name>
+moodle open course <course-id|name|current|0>
+moodle open current current
+moodle open resource <course-id|name|current|0> <resource-id|name|current|0>
 ```
 Note: `moodle` is available on PATH in this workspace; avoid sourcing `~/.zshrc` from non-interactive shell commands because it loads interactive prompt setup.
 
@@ -76,14 +77,17 @@ source <(moodle completion zsh)
 ## Commands
 - `moodle login`
 - `moodle list courses --json`
-- `moodle list files <course-id|name> --json`
+- `moodle list files <course-id|name|current|0> --json`
 - `moodle list timetable --json`
-- `moodle open course <course-id|name>`
-- `moodle open resource <course-id|name> <resource-id|name>`
-- `moodle download file <course-id|name> <resource-id|name> --output-dir <path>`
-- `moodle download file <course-id|name> --all --output-dir <path>`
-- `moodle export course <course-id|name> --output-dir <path>`
-- `moodle print course <course-id|name> <resource-id|name>`
+- `moodle list current current --json`
+- `moodle open course <course-id|name|current|0>`
+- `moodle open current current`
+- `moodle open resource <course-id|name|current|0> <resource-id|name|current|0>`
+- `moodle download file <course-id|name|current|0> <resource-id|name|current|0> --output-dir <path>`
+- `moodle download file <course-id|name|current|0> --all --output-dir <path>`
+- `moodle export course <course-id|name|current|0> --output-dir <path>`
+- `moodle print current current`
+- `moodle print course <course-id|name|current|0> <resource-id|name|current|0>`
 
 For best PDF OCR in `moodle print`, install `tesseract` and `pdftoppm` (Poppler).
 
