@@ -1,6 +1,12 @@
 package cli
 
-import "testing"
+import (
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/DotNaos/moodle-cli/internal/moodle"
+)
 
 func TestCurrentLectureOpenTargetPrefersMaterial(t *testing.T) {
 	result := currentLectureResult{
@@ -26,5 +32,37 @@ func TestCurrentLectureOpenTargetFallsBackToCourse(t *testing.T) {
 	}
 	if url != "https://example.com/course" {
 		t.Fatalf("expected course URL, got %q", url)
+	}
+}
+
+func TestDownloadResourceToTempFileWritesNamedFile(t *testing.T) {
+	client := &moodle.Client{}
+	resource := moodle.Resource{
+		ID:       "1",
+		Name:     "Folien Teil 2",
+		URL:      "https://example.com/mod/resource/view.php?id=1&redirect=1",
+		Type:     "resource",
+		FileType: "pdf",
+	}
+
+	original := moodleDownloadFileToBuffer
+	moodleDownloadFileToBuffer = func(client *moodle.Client, url string) (moodle.DownloadResult, error) {
+		return moodle.DownloadResult{Data: []byte("hello"), ContentType: "application/pdf"}, nil
+	}
+	defer func() { moodleDownloadFileToBuffer = original }()
+
+	path, err := downloadResourceToTempFile(client, resource)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.HasSuffix(path, "Folien Teil 2.pdf") {
+		t.Fatalf("expected pdf filename, got %q", path)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("expected temp file to exist: %v", err)
+	}
+	if string(data) != "hello" {
+		t.Fatalf("expected downloaded contents, got %q", string(data))
 	}
 }

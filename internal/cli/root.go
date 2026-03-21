@@ -21,6 +21,9 @@ var rootCmd = &cobra.Command{
 	Use:   "moodle",
 	Short: "CLI for FHGR Moodle",
 	Long:  "Command-line access to Moodle for listing courses and files, downloading resources, exporting courses, and viewing your timetable.",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return launchTUI(selectorOptions{})
+	},
 }
 
 func init() {
@@ -36,10 +39,12 @@ func init() {
 		configCmd,
 		loginCmd,
 		listCmd,
+		navCmd,
 		openCmd,
 		downloadCmd,
 		exportCmd,
 		printCmd,
+		tuiCmd,
 	)
 }
 

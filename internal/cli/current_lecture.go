@@ -31,6 +31,7 @@ type currentLectureResource struct {
 	Kind         string  `json:"kind"`
 	SectionTitle string  `json:"sectionTitle,omitempty"`
 	FileType     string  `json:"fileType,omitempty"`
+	UploadedAt   string  `json:"uploadedAt,omitempty"`
 	Score        int     `json:"score"`
 	LocalPath    *string `json:"localPath,omitempty"`
 }
@@ -182,16 +183,7 @@ func buildCurrentLectureResult(client *moodle.Client, calendarURL string, now ti
 
 	ranked := rankCurrentLectureResources(resources, localFiles)
 	result.Resources = ranked
-	if len(ranked) > 0 {
-		best := ranked[0]
-		for _, candidate := range ranked {
-			if candidate.Kind == "lecture" {
-				best = candidate
-				break
-			}
-		}
-		result.Material = &best
-	}
+	result.Material = selectBestCurrentLectureMaterial(ranked)
 
 	return result, nil
 }
@@ -333,25 +325,16 @@ func classifyCurrentLectureResource(name string) string {
 
 func rankCurrentLectureResources(resources []moodle.Resource, localFiles map[string]string) []currentLectureResource {
 	ranked := make([]currentLectureResource, 0, len(resources))
-	sectionOrder := map[string]int{}
-	nextSectionIndex := 1
 	type sortableResource struct {
 		resource      currentLectureResource
-		sectionIndex  int
 		resourceIndex int
+		uploadedAt    time.Time
+		hasUploadedAt bool
 	}
 	sortable := make([]sortableResource, 0, len(resources))
 	for resourceIndex, resource := range resources {
 		if resource.Type != "resource" {
 			continue
-		}
-		sectionKey := strings.TrimSpace(resource.SectionName)
-		if sectionKey == "" {
-			sectionKey = "General"
-		}
-		if _, ok := sectionOrder[sectionKey]; !ok {
-			sectionOrder[sectionKey] = nextSectionIndex
-			nextSectionIndex += 1
 		}
 		localPath := localFiles[normalizeLectureValue(resource.Name)]
 		candidate := currentLectureResource{
@@ -361,25 +344,33 @@ func rankCurrentLectureResources(resources []moodle.Resource, localFiles map[str
 			Kind:         classifyCurrentLectureResource(resource.Name),
 			SectionTitle: resource.SectionName,
 			FileType:     resource.FileType,
+			UploadedAt:   resource.UploadedAt,
 		}
 		if localPath != "" {
 			candidate.LocalPath = &localPath
 		}
+		uploadedAt, hasUploadedAt := parseRFC3339Time(resource.UploadedAt)
 		sortable = append(sortable, sortableResource{
 			resource:      candidate,
-			sectionIndex:  sectionOrder[sectionKey],
 			resourceIndex: resourceIndex,
+			uploadedAt:    uploadedAt,
+			hasUploadedAt: hasUploadedAt,
 		})
 	}
-	for index := range sortable {
-		sortable[index].resource.Score = (sortable[index].sectionIndex * 1000) - sortable[index].resourceIndex
-	}
 	slices.SortFunc(sortable, func(left, right sortableResource) int {
-		if left.sectionIndex > right.sectionIndex {
-			return -1
-		}
-		if left.sectionIndex < right.sectionIndex {
+		if left.hasUploadedAt != right.hasUploadedAt {
+			if left.hasUploadedAt {
+				return -1
+			}
 			return 1
+		}
+		if left.hasUploadedAt && right.hasUploadedAt {
+			if left.uploadedAt.After(right.uploadedAt) {
+				return -1
+			}
+			if left.uploadedAt.Before(right.uploadedAt) {
+				return 1
+			}
 		}
 		if left.resourceIndex < right.resourceIndex {
 			return -1
@@ -389,10 +380,55 @@ func rankCurrentLectureResources(resources []moodle.Resource, localFiles map[str
 		}
 		return strings.Compare(left.resource.Label, right.resource.Label)
 	})
-	for _, entry := range sortable {
+	for index, entry := range sortable {
+		entry.resource.Score = len(sortable) - index
 		ranked = append(ranked, entry.resource)
 	}
 	return ranked
+}
+
+func selectBestCurrentLectureMaterial(resources []currentLectureResource) *currentLectureResource {
+	if len(resources) == 0 {
+		return nil
+	}
+	for _, candidate := range resources {
+		if candidate.Kind == "lecture" && strings.EqualFold(candidate.FileType, "pdf") && candidate.UploadedAt != "" {
+			copy := candidate
+			return &copy
+		}
+	}
+	for _, candidate := range resources {
+		if candidate.Kind == "lecture" && strings.EqualFold(candidate.FileType, "pdf") {
+			copy := candidate
+			return &copy
+		}
+	}
+	for _, candidate := range resources {
+		if strings.EqualFold(candidate.FileType, "pdf") && candidate.UploadedAt != "" {
+			copy := candidate
+			return &copy
+		}
+	}
+	for _, candidate := range resources {
+		if strings.EqualFold(candidate.FileType, "pdf") {
+			copy := candidate
+			return &copy
+		}
+	}
+	copy := resources[0]
+	return &copy
+}
+
+func parseRFC3339Time(value string) (time.Time, bool) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return time.Time{}, false
+	}
+	parsed, err := time.Parse(time.RFC3339, trimmed)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return parsed, true
 }
 
 func findLocalCourseFiles(workspaceRoot string, courseID string) map[string]string {
@@ -561,9 +597,13 @@ func buildSelectedCourseResult(client *moodle.Client, courseArg string, resource
 	if strings.TrimSpace(workspace) != "" {
 		localFiles = findLocalCourseFiles(workspace, courseID)
 	}
-	result.Resources = orderedCourseResources(resources, localFiles)
+	if currentResult.Course != nil && currentResult.Course.ID == course.ID {
+		result.Resources = rankCurrentLectureResources(resources, localFiles)
+	} else {
+		result.Resources = orderedCourseResources(resources, localFiles)
+	}
 
-	selected, err := resolveResourceWithCurrent(resources, resourceArg, currentMaterialIDForCourse(courseID, currentResult))
+	selected, err := resolveResourceWithCurrentOrder(resources, resourceArg, currentMaterialIDForCourse(courseID, currentResult), resourceIDs(result.Resources))
 	if err != nil {
 		return result, err
 	}
@@ -596,6 +636,7 @@ func resourceToCurrentLectureResource(resource moodle.Resource, ranked []current
 		Kind:         classifyCurrentLectureResource(resource.Name),
 		SectionTitle: resource.SectionName,
 		FileType:     resource.FileType,
+		UploadedAt:   resource.UploadedAt,
 	}
 	if localPath != "" {
 		result.LocalPath = &localPath
@@ -618,6 +659,7 @@ func orderedCourseResources(resources []moodle.Resource, localFiles map[string]s
 			Kind:         classifyCurrentLectureResource(resource.Name),
 			SectionTitle: resource.SectionName,
 			FileType:     resource.FileType,
+			UploadedAt:   resource.UploadedAt,
 			Score:        score,
 		}
 		if localPath != "" {

@@ -9,6 +9,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var currentLectureResultForCompletion = func(client *moodle.Client) (currentLectureResult, error) {
+	return resolveCurrentLectureResult(client, selectorOptions{})
+}
+
 func completeCourseIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	out := []string{
 		formatCompValue("current", "Current lecture course"),
@@ -34,6 +38,7 @@ func completeCourseIDs(cmd *cobra.Command, args []string, toComplete string) ([]
 	if err != nil {
 		return out, cobra.ShellCompDirectiveNoFileComp
 	}
+	updateCurrentCourseCompletionDescriptions(out, client)
 
 	nameCounts := make(map[string]int, len(courses))
 	for _, course := range courses {
@@ -87,10 +92,8 @@ func completeResourcesForCourseArg(courseArg string) ([]string, cobra.ShellCompD
 		return out, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	currentCourse, err := resolveCurrentLectureCourse(client, selectorOptions{})
-	if err != nil && !strings.Contains(err.Error(), "calendar URL not set") {
-		return out, cobra.ShellCompDirectiveNoFileComp
-	}
+	currentResult, _ := currentLectureResultForCompletion(client)
+	currentCourse := currentResult.Course
 	courseID, err := resolveCourseIDFromCoursesWithCurrent(courses, courseArg, currentCourse)
 	if err != nil {
 		return out, cobra.ShellCompDirectiveNoFileComp
@@ -100,6 +103,7 @@ func completeResourcesForCourseArg(courseArg string) ([]string, cobra.ShellCompD
 	if err != nil {
 		return out, cobra.ShellCompDirectiveNoFileComp
 	}
+	updateCurrentResourceCompletionDescriptions(out, courseID, currentResult)
 
 	nameCounts := make(map[string]int, len(resources))
 	for _, res := range resources {
@@ -107,7 +111,8 @@ func completeResourcesForCourseArg(courseArg string) ([]string, cobra.ShellCompD
 		nameCounts[key]++
 	}
 
-	for index, res := range fileResources(resources) {
+	indexedResources := orderedResourcesForCompletion(courseID, resources, currentResult)
+	for index, res := range indexedResources {
 		out = append(out, formatCompValue(fmt.Sprintf("%d", index+1), res.Name))
 	}
 	for _, res := range resources {
@@ -246,4 +251,36 @@ func completeSchoolIDs(_ *cobra.Command, _ []string, _ string) ([]string, cobra.
 		out = append(out, formatCompValue(s.ID, s.Name))
 	}
 	return out, cobra.ShellCompDirectiveNoFileComp
+}
+
+func updateCurrentCourseCompletionDescriptions(out []string, client *moodle.Client) {
+	result, err := currentLectureResultForCompletion(client)
+	if err != nil || result.Event == nil || result.Course == nil {
+		return
+	}
+	desc := fmt.Sprintf("%s -> %s", result.Event.Summary, result.Course.Title)
+	out[0] = formatCompValue("current", desc)
+	out[1] = formatCompValue("0", desc)
+}
+
+func updateCurrentResourceCompletionDescriptions(out []string, courseID string, result currentLectureResult) {
+	if result.Course == nil || result.Material == nil {
+		return
+	}
+	if fmt.Sprintf("%d", result.Course.ID) != strings.TrimSpace(courseID) {
+		return
+	}
+	desc := fmt.Sprintf("%s (current material)", result.Material.Label)
+	out[0] = formatCompValue("current", desc)
+	out[1] = formatCompValue("0", desc)
+}
+
+func orderedResourcesForCompletion(courseID string, resources []moodle.Resource, result currentLectureResult) []moodle.Resource {
+	if result.Course == nil {
+		return fileResources(resources)
+	}
+	if fmt.Sprintf("%d", result.Course.ID) != strings.TrimSpace(courseID) {
+		return fileResources(resources)
+	}
+	return orderedFileResources(resources, resourceIDs(result.Resources))
 }

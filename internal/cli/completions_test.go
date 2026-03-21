@@ -230,6 +230,51 @@ func TestCompleteCourseIDsIncludesCurrentSelectors(t *testing.T) {
 	}
 }
 
+func TestUpdateCurrentCourseCompletionDescriptions(t *testing.T) {
+	out := []string{
+		formatCompValue("current", "Current lecture course"),
+		formatCompValue("0", "Current lecture course"),
+	}
+	client := &moodle.Client{}
+	original := currentLectureResultForCompletion
+	currentLectureResultForCompletion = func(client *moodle.Client) (currentLectureResult, error) {
+		return currentLectureResult{
+			Event:  &moodle.CalendarEvent{Summary: "Deep Learning"},
+			Course: &currentLectureCourse{ID: 22585, Title: "Deep Learning (cds-108) FS26"},
+		}, nil
+	}
+	defer func() { currentLectureResultForCompletion = original }()
+
+	updateCurrentCourseCompletionDescriptions(out, client)
+
+	if out[0] != "current\tDeep Learning -> Deep Learning (cds-108) FS26" {
+		t.Fatalf("unexpected current completion: %q", out[0])
+	}
+	if out[1] != "0\tDeep Learning -> Deep Learning (cds-108) FS26" {
+		t.Fatalf("unexpected zero completion: %q", out[1])
+	}
+}
+
+func TestUpdateCurrentResourceCompletionDescriptions(t *testing.T) {
+	out := []string{
+		formatCompValue("current", "Current or top-ranked material"),
+		formatCompValue("0", "Current or top-ranked material"),
+	}
+	result := currentLectureResult{
+		Course:   &currentLectureCourse{ID: 22585, Title: "Deep Learning (cds-108) FS26"},
+		Material: &currentLectureResource{ID: "948787", Label: "Einführungsfolien"},
+	}
+
+	updateCurrentResourceCompletionDescriptions(out, "22585", result)
+
+	if out[0] != "current\tEinführungsfolien (current material)" {
+		t.Fatalf("unexpected current resource completion: %q", out[0])
+	}
+	if out[1] != "0\tEinführungsfolien (current material)" {
+		t.Fatalf("unexpected zero resource completion: %q", out[1])
+	}
+}
+
 func TestBrowserOpenCommand(t *testing.T) {
 	tests := []struct {
 		name     string

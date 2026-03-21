@@ -75,6 +75,21 @@ func TestResolveResourceWithCurrentSupportsCurrentAndIndices(t *testing.T) {
 	}
 }
 
+func TestResolveResourceWithCurrentOrderUsesProvidedOrdering(t *testing.T) {
+	resources := []moodle.Resource{
+		{ID: "10", Name: "Einführungsfolien", Type: "resource", FileType: "pdf"},
+		{ID: "11", Name: "Data Augmentation", Type: "resource", FileType: "pdf"},
+		{ID: "12", Name: "CNN", Type: "resource", FileType: "pdf"},
+	}
+	ordered, err := resolveResourceWithCurrentOrder(resources, "1", "", []string{"11", "12", "10"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ordered.ID != "11" {
+		t.Fatalf("expected first ordered resource id 11, got %s", ordered.ID)
+	}
+}
+
 func TestParentCommandsAcceptDirectSelectors(t *testing.T) {
 	tests := []struct {
 		name string

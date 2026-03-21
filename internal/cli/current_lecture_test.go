@@ -46,13 +46,13 @@ func TestMatchCourseForLecture(t *testing.T) {
 	}
 }
 
-func TestRankCurrentLectureResourcesPrefersLectureSlides(t *testing.T) {
+func TestRankCurrentLectureResourcesOrdersByNewestTimestamp(t *testing.T) {
 	resources := []moodle.Resource{
-		{Name: "Folien Teil 1", Type: "resource", FileType: "pdf", SectionName: "Thema 1"},
-		{Name: "Aufgabenblatt 01", Type: "resource", FileType: "pdf", SectionName: "Thema 1"},
-		{Name: "Folien Teil 2", Type: "resource", FileType: "pdf", SectionName: "Thema 2"},
-		{Name: "Datei: papa.png", Type: "resource", FileType: "png", SectionName: "Thema 2"},
-		{Name: "Aufgabenblatt 03", Type: "resource", FileType: "pdf", SectionName: "Thema 2"},
+		{Name: "Folien Teil 1", Type: "resource", FileType: "pdf", UploadedAt: "2026-03-05T20:49:00+01:00"},
+		{Name: "Aufgabenblatt 01", Type: "resource", FileType: "pdf"},
+		{Name: "Folien Teil 2", Type: "resource", FileType: "pdf", UploadedAt: "2026-03-19T22:00:00+01:00"},
+		{Name: "Datei: papa.png", Type: "resource", FileType: "png", UploadedAt: "2026-03-19T21:37:00+01:00"},
+		{Name: "Aufgabenblatt 03", Type: "resource", FileType: "pdf", UploadedAt: "2026-03-19T21:35:00+01:00"},
 	}
 	ranked := rankCurrentLectureResources(resources, map[string]string{})
 	if len(ranked) != 5 {
@@ -63,5 +63,17 @@ func TestRankCurrentLectureResourcesPrefersLectureSlides(t *testing.T) {
 		if ranked[index].Label != label {
 			t.Fatalf("expected rank %d to be %q, got %q", index, label, ranked[index].Label)
 		}
+	}
+}
+
+func TestSelectBestCurrentLectureMaterialPrefersNewestLecturePDF(t *testing.T) {
+	resources := []currentLectureResource{
+		{Label: "Data Augmentation", FileType: "pdf", Kind: "other", UploadedAt: "2026-03-20T15:30:00+01:00"},
+		{Label: "Einführungsfolien", FileType: "pdf", Kind: "lecture", UploadedAt: "2026-02-16T18:03:00+01:00"},
+		{Label: "CNN", FileType: "pdf", Kind: "other", UploadedAt: "2026-03-20T15:20:00+01:00"},
+	}
+	best := selectBestCurrentLectureMaterial(resources)
+	if best == nil || best.Label != "Einführungsfolien" {
+		t.Fatalf("expected newest lecture pdf to be chosen, got %#v", best)
 	}
 }

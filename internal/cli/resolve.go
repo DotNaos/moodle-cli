@@ -92,24 +92,30 @@ func resolveCourseIDFromCoursesWithCurrent(courses []moodle.Course, input string
 }
 
 func resolveResource(resources []moodle.Resource, input string) (*moodle.Resource, error) {
-	return resolveResourceWithCurrent(resources, input, "")
+	return resolveResourceWithCurrentOrder(resources, input, "", nil)
 }
 
 func resolveResourceWithOptions(client *moodle.Client, courseID string, resources []moodle.Resource, input string, options selectorOptions) (*moodle.Resource, error) {
 	currentMaterialID := ""
-	if isCurrentSelector(input) {
+	var orderedIDs []string
+	if isCurrentSelector(input) || isIndexedSelector(input) {
 		currentResult, err := resolveCurrentLectureResult(client, options)
 		if err != nil {
 			return nil, err
 		}
 		if currentResult.Course != nil && fmt.Sprintf("%d", currentResult.Course.ID) == courseID && currentResult.Material != nil {
 			currentMaterialID = currentResult.Material.ID
+			orderedIDs = resourceIDs(currentResult.Resources)
 		}
 	}
-	return resolveResourceWithCurrent(resources, input, currentMaterialID)
+	return resolveResourceWithCurrentOrder(resources, input, currentMaterialID, orderedIDs)
 }
 
 func resolveResourceWithCurrent(resources []moodle.Resource, input string, currentMaterialID string) (*moodle.Resource, error) {
+	return resolveResourceWithCurrentOrder(resources, input, currentMaterialID, nil)
+}
+
+func resolveResourceWithCurrentOrder(resources []moodle.Resource, input string, currentMaterialID string, orderedIDs []string) (*moodle.Resource, error) {
 	trimmed := strings.TrimSpace(input)
 	if trimmed == "" {
 		return nil, fmt.Errorf("resource not found: %s", input)
@@ -160,7 +166,7 @@ func resolveResourceWithCurrent(resources []moodle.Resource, input string, curre
 	}
 
 	if index, ok := parsePositiveIndex(trimmed); ok {
-		files := fileResources(resources)
+		files := orderedFileResources(resources, orderedIDs)
 		if index > len(files) {
 			return nil, fmt.Errorf("resource index out of range: %s", input)
 		}
@@ -205,6 +211,11 @@ func isCurrentSelector(value string) bool {
 	return strings.EqualFold(trimmed, "current") || trimmed == "0"
 }
 
+func isIndexedSelector(value string) bool {
+	_, ok := parsePositiveIndex(value)
+	return ok
+}
+
 func expandSingleCurrentAlias(args []string) []string {
 	if len(args) != 1 {
 		return args
@@ -226,6 +237,47 @@ func fileResources(resources []moodle.Resource) []moodle.Resource {
 		files = append(files, resource)
 	}
 	return files
+}
+
+func orderedFileResources(resources []moodle.Resource, orderedIDs []string) []moodle.Resource {
+	if len(orderedIDs) == 0 {
+		return fileResources(resources)
+	}
+	byID := make(map[string]moodle.Resource, len(resources))
+	for _, resource := range resources {
+		if resource.Type != "resource" {
+			continue
+		}
+		byID[resource.ID] = resource
+	}
+	ordered := make([]moodle.Resource, 0, len(resources))
+	seen := make(map[string]struct{}, len(orderedIDs))
+	for _, id := range orderedIDs {
+		resource, ok := byID[id]
+		if !ok {
+			continue
+		}
+		ordered = append(ordered, resource)
+		seen[id] = struct{}{}
+	}
+	for _, resource := range resources {
+		if resource.Type != "resource" {
+			continue
+		}
+		if _, ok := seen[resource.ID]; ok {
+			continue
+		}
+		ordered = append(ordered, resource)
+	}
+	return ordered
+}
+
+func resourceIDs(resources []currentLectureResource) []string {
+	ids := make([]string, 0, len(resources))
+	for _, resource := range resources {
+		ids = append(ids, resource.ID)
+	}
+	return ids
 }
 
 func resolveCurrentLectureResult(client *moodle.Client, options selectorOptions) (currentLectureResult, error) {
