@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -32,3 +31,86 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  macos-installers:
+    needs: release
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - amd64
+          - arm64
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Download release archive
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p dist/downloads
+          gh release download "${{ github.ref_name }}" \
+            --pattern "moodle_darwin_${{ matrix.arch }}.tar.gz" \
+            --dir dist/downloads
+
+      - name: Build DMG installer
+        run: |
+          mkdir -p dist/installers
+          bash packaging/macos/create-dmg.sh \
+            --archive "dist/downloads/moodle_darwin_${{ matrix.arch }}.tar.gz" \
+            --version "${{ github.ref_name }}" \
+            --arch "${{ matrix.arch }}" \
+            --output "dist/installers/moodle_darwin_${{ matrix.arch }}.dmg"
+
+      - name: Upload DMG installer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" \
+            "dist/installers/moodle_darwin_${{ matrix.arch }}.dmg" \
+            --clobber
+
+  windows-installers:
+    needs: release
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - amd64
+          - arm64
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --no-progress -y
+
+      - name: Download release archive
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          New-Item -ItemType Directory -Force -Path dist\downloads | Out-Null
+          gh release download "${{ github.ref_name }}" `
+            --pattern "moodle_windows_${{ matrix.arch }}.zip" `
+            --dir dist\downloads
+
+      - name: Build EXE installer
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path dist\installers | Out-Null
+          .\packaging\windows\build-installer.ps1 `
+            -ArchivePath "dist\downloads\moodle_windows_${{ matrix.arch }}.zip" `
+            -Version "${{ github.ref_name }}" `
+            -Arch "${{ matrix.arch }}" `
+            -OutputDir "dist\installers"
+
+      - name: Upload EXE installer
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" `
+            "dist\installers\moodle_windows_${{ matrix.arch }}_setup.exe" `
+            --clobber
