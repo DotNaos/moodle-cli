@@ -2,6 +2,7 @@ package cli
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -183,7 +184,7 @@ func TestTUIFilterUpdatesLiveAndClearsOnEscape(t *testing.T) {
 
 func TestTUIOpensDownloadDialogAndDownloadsToSelectedFolder(t *testing.T) {
 	tempDir := t.TempDir()
-	subDir := tempDir + "/nested"
+	subDir := filepath.Join(tempDir, "nested")
 	if err := os.MkdirAll(subDir, 0o755); err != nil {
 		t.Fatalf("mkdir failed: %v", err)
 	}
@@ -224,7 +225,7 @@ func TestTUIOpensDownloadDialogAndDownloadsToSelectedFolder(t *testing.T) {
 	model = next.(tuiModel)
 	next, _ = model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	model = next.(tuiModel)
-	if model.dialog == nil || model.dialog.cwd != subDir {
+	if model.dialog == nil || !samePath(t, model.dialog.cwd, subDir) {
 		t.Fatalf("expected dialog to enter nested directory, got %+v", model.dialog)
 	}
 
@@ -244,9 +245,23 @@ func TestTUIOpensDownloadDialogAndDownloadsToSelectedFolder(t *testing.T) {
 	if model.dialog != nil {
 		t.Fatalf("expected dialog to close after download")
 	}
-	if len(nav.downloads) != 1 || nav.downloads[0] != subDir {
+	if len(nav.downloads) != 1 || !samePath(t, nav.downloads[0], subDir) {
 		t.Fatalf("expected download to nested directory, got %v", nav.downloads)
 	}
+}
+
+func samePath(t *testing.T, left string, right string) bool {
+	t.Helper()
+
+	leftInfo, err := os.Stat(left)
+	if err != nil {
+		t.Fatalf("stat %q failed: %v", left, err)
+	}
+	rightInfo, err := os.Stat(right)
+	if err != nil {
+		t.Fatalf("stat %q failed: %v", right, err)
+	}
+	return os.SameFile(leftInfo, rightInfo)
 }
 
 func TestNavServiceResolveCurrentItemPath(t *testing.T) {

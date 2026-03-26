@@ -3,6 +3,7 @@ package cli
 import (
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/DotNaos/moodle-cli/internal/moodle"
@@ -392,17 +393,26 @@ func TestValidArgsForCommandsWithPositionalArgs(t *testing.T) {
 func assertExecCommand(t *testing.T, cmd *exec.Cmd, wantPath string, wantArgs []string) {
 	t.Helper()
 
-	if cmd.Path != wantPath {
-		if filepath.Base(cmd.Path) != wantPath {
-			t.Fatalf("expected path %q, got %q", wantPath, cmd.Path)
-		}
+	if normalizeCommandName(cmd.Path) != wantPath {
+		t.Fatalf("expected path %q, got %q", wantPath, cmd.Path)
 	}
 	if len(cmd.Args) != len(wantArgs) {
 		t.Fatalf("expected args %v, got %v", wantArgs, cmd.Args)
 	}
 	for i := range wantArgs {
-		if cmd.Args[i] != wantArgs[i] {
+		got := cmd.Args[i]
+		if i == 0 {
+			got = normalizeCommandName(got)
+		}
+		if got != wantArgs[i] {
 			t.Fatalf("expected args %v, got %v", wantArgs, cmd.Args)
 		}
 	}
+}
+
+func normalizeCommandName(value string) string {
+	base := filepath.Base(value)
+	ext := filepath.Ext(base)
+	base = strings.TrimSuffix(base, ext)
+	return strings.ToLower(base)
 }
