@@ -54,7 +54,7 @@ func shouldCheckForUpdates(cmd *cobra.Command) bool {
 	if cmd == nil {
 		return false
 	}
-	if !isInteractiveTerminal(int(os.Stderr.Fd())) {
+	if !isInteractiveTerminal(os.Stderr) {
 		return false
 	}
 	if commandPathHas(cmd, "version") || commandPathHas(cmd, "update") || commandPathHas(cmd, "completion") {
@@ -63,8 +63,7 @@ func shouldCheckForUpdates(cmd *cobra.Command) bool {
 	return true
 }
 
-var isInteractiveTerminal = func(fd int) bool {
-	file := os.NewFile(uintptr(fd), "terminal")
+var isInteractiveTerminal = func(file *os.File) bool {
 	if file == nil {
 		return false
 	}

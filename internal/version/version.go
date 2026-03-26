@@ -19,9 +19,10 @@ var (
 )
 
 type Semver struct {
-	Major int
-	Minor int
-	Patch int
+	Major      int
+	Minor      int
+	Patch      int
+	Prerelease string
 }
 
 func Version() string {
@@ -55,7 +56,12 @@ func ParseSemver(raw string) (Semver, error) {
 	if trimmed == "" {
 		return Semver{}, fmt.Errorf("empty version")
 	}
+	if idx := strings.Index(trimmed, "+"); idx >= 0 {
+		trimmed = trimmed[:idx]
+	}
+	prerelease := ""
 	if idx := strings.Index(trimmed, "-"); idx >= 0 {
+		prerelease = trimmed[idx+1:]
 		trimmed = trimmed[:idx]
 	}
 	parts := strings.Split(trimmed, ".")
@@ -74,7 +80,7 @@ func ParseSemver(raw string) (Semver, error) {
 	if err != nil {
 		return Semver{}, fmt.Errorf("invalid patch version: %w", err)
 	}
-	return Semver{Major: major, Minor: minor, Patch: patch}, nil
+	return Semver{Major: major, Minor: minor, Patch: patch, Prerelease: prerelease}, nil
 }
 
 func Compare(a string, b string) (int, error) {
@@ -92,8 +98,16 @@ func Compare(a string, b string) (int, error) {
 		return compareInt(left.Major, right.Major), nil
 	case left.Minor != right.Minor:
 		return compareInt(left.Minor, right.Minor), nil
-	default:
+	case left.Patch != right.Patch:
 		return compareInt(left.Patch, right.Patch), nil
+	case left.Prerelease == right.Prerelease:
+		return 0, nil
+	case left.Prerelease == "":
+		return 1, nil
+	case right.Prerelease == "":
+		return -1, nil
+	default:
+		return strings.Compare(left.Prerelease, right.Prerelease), nil
 	}
 }
 

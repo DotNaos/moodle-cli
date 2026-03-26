@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"os"
 	"strings"
 	"testing"
 )
@@ -24,7 +25,7 @@ func TestVersionCommandOutput(t *testing.T) {
 
 func TestShouldCheckForUpdatesSkipsVersionAndUpdateCommands(t *testing.T) {
 	original := isInteractiveTerminal
-	isInteractiveTerminal = func(fd int) bool { return true }
+	isInteractiveTerminal = func(file *os.File) bool { return true }
 	defer func() { isInteractiveTerminal = original }()
 
 	if shouldCheckForUpdates(versionCmd) {
