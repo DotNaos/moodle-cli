@@ -1,0 +1,38 @@
+version: 2
+
+project_name: moodle
+
+builds:
+  - id: moodle
+    main: ./cmd/moodle
+    binary: moodle
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X github.com/DotNaos/moodle-cli/internal/version.version={{ .Version }} -X github.com/DotNaos/moodle-cli/internal/version.commit={{ .Commit }} -X github.com/DotNaos/moodle-cli/internal/version.buildDate={{ .Date }}
+
+archives:
+  - id: archives
+    ids:
+      - moodle
+    name_template: moodle_{{ .Os }}_{{ .Arch }}
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: git
