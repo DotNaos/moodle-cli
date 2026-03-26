@@ -195,7 +195,7 @@ func parseUploadedAt(details string) string {
 	if len(match) != 2 {
 		return ""
 	}
-	parsed, err := time.ParseInLocation("2.1.2006 15:04", match[1], time.Local)
+	parsed, err := parseSwissTimestamp(match[1])
 	if err != nil {
 		return ""
 	}
