@@ -10,6 +10,10 @@ Direkt aus den Releases:
 - Windows: `.exe` installer
 - Linux: `.tar.gz`
 
+Release channels:
+- `stable`: created from `main`
+- `unstable`: prereleases updated from pull requests for testing before merge
+
 macOS / Linux:
 ```sh
 curl -fsSL https://raw.githubusercontent.com/DotNaos/moodle-cli/main/scripts/install.sh | bash

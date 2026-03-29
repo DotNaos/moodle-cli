@@ -1,0 +1,79 @@
+name: Release From PR
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+      - closed
+
+permissions:
+  actions: write
+  contents: write
+
+concurrency:
+  group: release-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  release-pr:
+    if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Publish unstable release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+
+          unstable_tag="v0.0.0-unstable.pr${PR_NUMBER}"
+          unstable_name="unstable-pr-${PR_NUMBER}"
+
+          gh release delete "${unstable_tag}" --yes >/dev/null 2>&1 || true
+          git push origin ":refs/tags/${unstable_tag}" >/dev/null 2>&1 || true
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -fa "${unstable_tag}" "${PR_SHA}" -m "Unstable release ${unstable_tag}"
+          git push origin "refs/tags/${unstable_tag}" --force
+
+          gh workflow run release.yml \
+            --ref "${PR_REF}" \
+            -f tag="${unstable_tag}" \
+            -f prerelease=true \
+            -f release_name="${unstable_name}"
+
+  cleanup-pr:
+    if: github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Delete unstable release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          unstable_tag="v0.0.0-unstable.pr${PR_NUMBER}"
+          gh release delete "${unstable_tag}" --yes >/dev/null 2>&1 || true
+          git push origin ":refs/tags/${unstable_tag}" >/dev/null 2>&1 || true

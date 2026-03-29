@@ -36,16 +36,22 @@ jobs:
         run: |
           set -euo pipefail
 
+          stable_tags() {
+            git tag --list 'v*' \
+              | awk '/^v[0-9]+\.[0-9]+\.[0-9]+$/' \
+              | sort -V
+          }
+
           git fetch --tags --force
 
-          existing_tag="$(git tag --points-at HEAD --list 'v*' --sort=-v:refname | head -n1 || true)"
+          existing_tag="$(git tag --points-at HEAD --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)"
           if [[ -n "${existing_tag}" ]]; then
             echo "tag=${existing_tag}" >> "${GITHUB_OUTPUT}"
             echo "created=false" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
 
-          latest_tag="$(git tag --list 'v*' --sort=-v:refname | head -n1 || true)"
+          latest_tag="$(stable_tags | tail -n1 || true)"
           if [[ -z "${latest_tag}" ]]; then
             next_tag="v0.1.0"
           else
@@ -77,4 +83,5 @@ jobs:
         run: |
           gh workflow run release.yml \
             --ref main \
-            -f tag="${{ steps.version.outputs.tag }}"
+            -f tag="${{ steps.version.outputs.tag }}" \
+            -f prerelease=false
