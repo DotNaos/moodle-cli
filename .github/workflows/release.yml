@@ -155,7 +155,6 @@ jobs:
           fi
 
       - name: Import Apple application certificate
-        if: (secrets.APPLE_APPLICATION_CERTIFICATE_P12 != '' && secrets.APPLE_APPLICATION_CERTIFICATE_PASSWORD != '') || (secrets.CSC_LINK != '' && secrets.CSC_KEY_PASSWORD != '')
         env:
           APPLE_APPLICATION_CERTIFICATE_P12: ${{ secrets.APPLE_APPLICATION_CERTIFICATE_P12 }}
           APPLE_APPLICATION_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_APPLICATION_CERTIFICATE_PASSWORD }}
@@ -169,6 +168,11 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         run: |
+          if [[ (-z "${APPLE_APPLICATION_CERTIFICATE_P12}" || -z "${APPLE_APPLICATION_CERTIFICATE_PASSWORD}") && (-z "${CSC_LINK}" || -z "${CSC_KEY_PASSWORD}") ]]; then
+            echo "No macOS application certificate configured. Skipping import."
+            exit 0
+          fi
+
           keychain_path="${RUNNER_TEMP}/moodle-release.keychain-db"
           keychain_password="$(openssl rand -hex 24)"
           certificate_path="${RUNNER_TEMP}/moodle-application-cert.p12"
