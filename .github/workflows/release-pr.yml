@@ -64,7 +64,7 @@ jobs:
             next_base="v${major}.${minor}.$((patch + 1))"
           fi
 
-          previous_tags="$(git tag --list "v*-unstable.pr${PR_NUMBER}.*" | sort -V || true)"
+          previous_tags="$(git tag --list "v*-unstable.pr${PR_NUMBER}*" | sort -V || true)"
           current_base_tags="$(git tag --list "${next_base}-unstable.pr${PR_NUMBER}.*" | sort -V || true)"
           prerelease_number="$(printf '%s\n' "${current_base_tags}" | sed '/^$/d' | wc -l | tr -d ' ')"
           prerelease_number="$((prerelease_number + 1))"
@@ -107,4 +107,4 @@ jobs:
             [[ -z "${unstable_tag}" ]] && continue
             gh release delete "${unstable_tag}" --yes >/dev/null 2>&1 || true
             git push origin ":refs/tags/${unstable_tag}" >/dev/null 2>&1 || true
-          done < <(git tag --list "v*-unstable.pr${PR_NUMBER}.*" | sort -V)
+          done < <(git tag --list "v*-unstable.pr${PR_NUMBER}*" | sort -V)
