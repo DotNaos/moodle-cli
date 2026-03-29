@@ -44,16 +44,44 @@ jobs:
         run: |
           set -euo pipefail
 
-          unstable_tag="v0.0.0-unstable.pr${PR_NUMBER}"
-          unstable_name="unstable-pr-${PR_NUMBER}"
+          stable_tags() {
+            git tag --list 'v*' \
+              | awk '/^v[0-9]+\.[0-9]+\.[0-9]+$/' \
+              | sort -V
+          }
 
-          gh release delete "${unstable_tag}" --yes >/dev/null 2>&1 || true
-          git push origin ":refs/tags/${unstable_tag}" >/dev/null 2>&1 || true
+          git fetch --tags --force
+
+          latest_stable="$(stable_tags | tail -n1 || true)"
+          if [[ -z "${latest_stable}" ]]; then
+            next_base="v0.1.0"
+          else
+            version="${latest_stable#v}"
+            major="${version%%.*}"
+            rest="${version#*.}"
+            minor="${rest%%.*}"
+            patch="${rest##*.}"
+            next_base="v${major}.${minor}.$((patch + 1))"
+          fi
+
+          previous_tags="$(git tag --list "v*-unstable.pr${PR_NUMBER}.*" | sort -V || true)"
+          current_base_tags="$(git tag --list "${next_base}-unstable.pr${PR_NUMBER}.*" | sort -V || true)"
+          prerelease_number="$(printf '%s\n' "${current_base_tags}" | sed '/^$/d' | wc -l | tr -d ' ')"
+          prerelease_number="$((prerelease_number + 1))"
+
+          unstable_tag="${next_base}-unstable.pr${PR_NUMBER}.${prerelease_number}"
+          unstable_name="${unstable_tag}"
+
+          while IFS= read -r old_tag; do
+            [[ -z "${old_tag}" ]] && continue
+            gh release delete "${old_tag}" --yes >/dev/null 2>&1 || true
+            git push origin ":refs/tags/${old_tag}" >/dev/null 2>&1 || true
+          done <<< "${previous_tags}"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -fa "${unstable_tag}" "${PR_SHA}" -m "Unstable release ${unstable_tag}"
-          git push origin "refs/tags/${unstable_tag}" --force
+          git tag -a "${unstable_tag}" "${PR_SHA}" -m "Unstable release ${unstable_tag}"
+          git push origin "${unstable_tag}"
 
           gh workflow run release.yml \
             --ref "${PR_REF}" \
@@ -74,6 +102,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          unstable_tag="v0.0.0-unstable.pr${PR_NUMBER}"
-          gh release delete "${unstable_tag}" --yes >/dev/null 2>&1 || true
-          git push origin ":refs/tags/${unstable_tag}" >/dev/null 2>&1 || true
+          git fetch --tags --force
+          while IFS= read -r unstable_tag; do
+            [[ -z "${unstable_tag}" ]] && continue
+            gh release delete "${unstable_tag}" --yes >/dev/null 2>&1 || true
+            git push origin ":refs/tags/${unstable_tag}" >/dev/null 2>&1 || true
+          done < <(git tag --list "v*-unstable.pr${PR_NUMBER}.*" | sort -V)
