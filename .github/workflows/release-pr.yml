@@ -50,26 +50,29 @@ jobs:
               | sort -V
           }
 
+          slugify_branch() {
+            printf '%s' "$1" \
+              | tr '[:upper:]' '[:lower:]' \
+              | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//; s/-+/-/g'
+          }
+
           git fetch --tags --force
 
           latest_stable="$(stable_tags | tail -n1 || true)"
           if [[ -z "${latest_stable}" ]]; then
-            next_base="v0.1.0"
-          else
-            version="${latest_stable#v}"
-            major="${version%%.*}"
-            rest="${version#*.}"
-            minor="${rest%%.*}"
-            patch="${rest##*.}"
-            next_base="v${major}.${minor}.$((patch + 1))"
+            latest_stable="v0.1.0"
           fi
 
-          previous_tags="$(git tag --list "v*-unstable.pr${PR_NUMBER}*" | sort -V || true)"
-          current_base_tags="$(git tag --list "${next_base}-unstable.pr${PR_NUMBER}.*" | sort -V || true)"
-          prerelease_number="$(printf '%s\n' "${current_base_tags}" | sed '/^$/d' | wc -l | tr -d ' ')"
+          branch_slug="$(slugify_branch "${PR_REF}")"
+          if [[ -z "${branch_slug}" ]]; then
+            branch_slug="branch"
+          fi
+
+          previous_tags="$(git tag --list "${latest_stable}-canary.${branch_slug}.*" | sort -V || true)"
+          prerelease_number="$(printf '%s\n' "${previous_tags}" | sed '/^$/d' | wc -l | tr -d ' ')"
           prerelease_number="$((prerelease_number + 1))"
 
-          unstable_tag="${next_base}-unstable.pr${PR_NUMBER}.${prerelease_number}"
+          unstable_tag="${latest_stable}-canary.${branch_slug}.${prerelease_number}"
           unstable_name="${unstable_tag}"
 
           while IFS= read -r old_tag; do
@@ -77,6 +80,12 @@ jobs:
             gh release delete "${old_tag}" --yes >/dev/null 2>&1 || true
             git push origin ":refs/tags/${old_tag}" >/dev/null 2>&1 || true
           done <<< "${previous_tags}"
+
+          while IFS= read -r legacy_tag; do
+            [[ -z "${legacy_tag}" ]] && continue
+            gh release delete "${legacy_tag}" --yes >/dev/null 2>&1 || true
+            git push origin ":refs/tags/${legacy_tag}" >/dev/null 2>&1 || true
+          done < <(git tag --list "v*-unstable.pr${PR_NUMBER}*" | sort -V)
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -101,10 +110,25 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_REF: ${{ github.event.pull_request.head.ref }}
         run: |
+          slugify_branch() {
+            printf '%s' "$1" \
+              | tr '[:upper:]' '[:lower:]' \
+              | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//; s/-+/-/g'
+          }
+
           git fetch --tags --force
+
+          branch_slug="$(slugify_branch "${PR_REF}")"
+
           while IFS= read -r unstable_tag; do
             [[ -z "${unstable_tag}" ]] && continue
             gh release delete "${unstable_tag}" --yes >/dev/null 2>&1 || true
             git push origin ":refs/tags/${unstable_tag}" >/dev/null 2>&1 || true
-          done < <(git tag --list "v*-unstable.pr${PR_NUMBER}*" | sort -V)
+          done < <(
+            {
+              git tag --list "v*-canary.${branch_slug}.*"
+              git tag --list "v*-unstable.pr${PR_NUMBER}*"
+            } | sort -V | uniq
+          )

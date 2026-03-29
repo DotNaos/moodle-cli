@@ -12,7 +12,7 @@ Direkt aus den Releases:
 
 Release channels:
 - `stable`: created from `main`
-- `unstable`: prereleases updated from pull requests for testing before merge, named like the next version with an unstable prerelease suffix
+- `unstable`: prereleases updated from pull requests for testing before merge, named like the current stable version plus a `canary.<branch>.<attempt>` suffix
 
 macOS / Linux:
 ```sh
