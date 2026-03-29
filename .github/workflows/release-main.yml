@@ -7,6 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: write
   contents: write
 
 concurrency:
@@ -29,7 +30,8 @@ jobs:
       - name: Run tests
         run: go test ./...
 
-      - name: Create and push next tag
+      - name: Determine release tag
+        id: version
         shell: bash
         run: |
           set -euo pipefail
@@ -38,7 +40,8 @@ jobs:
 
           existing_tag="$(git tag --points-at HEAD --list 'v*' --sort=-v:refname | head -n1 || true)"
           if [[ -n "${existing_tag}" ]]; then
-            echo "HEAD already tagged with ${existing_tag}"
+            echo "tag=${existing_tag}" >> "${GITHUB_OUTPUT}"
+            echo "created=false" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
 
@@ -54,7 +57,24 @@ jobs:
             next_tag="v${major}.${minor}.$((patch + 1))"
           fi
 
+          echo "tag=${next_tag}" >> "${GITHUB_OUTPUT}"
+          echo "created=true" >> "${GITHUB_OUTPUT}"
+
+      - name: Create and push tag
+        if: steps.version.outputs.created == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "${next_tag}" -m "Release ${next_tag}"
-          git push origin "${next_tag}"
+          git tag -a "${{ steps.version.outputs.tag }}" -m "Release ${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
+
+      - name: Dispatch release workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run release.yml \
+            --ref main \
+            -f tag="${{ steps.version.outputs.tag }}"

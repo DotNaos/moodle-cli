@@ -1,5 +1,3 @@
-$ErrorActionPreference = "Stop"
-
 param(
   [Parameter(Mandatory = $true)]
   [string]$ArchivePath,
@@ -11,6 +9,8 @@ param(
   [Parameter(Mandatory = $true)]
   [string]$OutputDir
 )
+
+$ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $ExtractDir = Join-Path $env:TEMP ("moodle-installer-" + [System.Guid]::NewGuid().ToString("n"))

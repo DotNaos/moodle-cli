@@ -29,7 +29,7 @@
 #endif
 
 [Setup]
-AppId={{7A7A1A5A-4A5E-4B64-B1B2-13C939D7A111}
+AppId={{7A7A1A5A-4A5E-4B64-B1B2-13C939D7A111}}
 AppName={#MyAppName}
 AppVersion={#AppVersion}
 AppPublisher=DotNaos
