@@ -44,6 +44,19 @@ cleanup() {
 }
 trap cleanup EXIT
 
+detach_device() {
+  local target_device="$1"
+
+  for _ in {1..10}; do
+    if hdiutil detach "${target_device}" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+
+  hdiutil detach -force "${target_device}" >/dev/null
+}
+
 mkdir -p "${stage_dir}"
 cp -R "${app}" "${stage_dir}/moodle-cli.app"
 ln -s /Applications "${stage_dir}/Applications"
@@ -118,7 +131,7 @@ fi
 
 if [[ -n "${device}" ]]; then
   detached_device="${device}"
-  hdiutil detach "${device}" >/dev/null
+  detach_device "${device}"
   device=""
   for _ in {1..20}; do
     if ! hdiutil info | grep -Fq "${detached_device}"; then
