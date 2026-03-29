@@ -97,13 +97,20 @@ jobs:
             --pattern "moodle_darwin_${{ matrix.arch }}.tar.gz" \
             --dir dist/downloads
 
+      - name: Build PKG installer
+        run: |
+          mkdir -p dist/installers
+          bash packaging/macos/build-pkg.sh \
+            --archive "dist/downloads/moodle_darwin_${{ matrix.arch }}.tar.gz" \
+            --version "${{ needs.resolve-release.outputs.tag }}" \
+            --output "dist/installers/moodle_darwin_${{ matrix.arch }}.pkg"
+
       - name: Build DMG installer
         run: |
           mkdir -p dist/installers
           bash packaging/macos/create-dmg.sh \
-            --archive "dist/downloads/moodle_darwin_${{ matrix.arch }}.tar.gz" \
             --version "${{ needs.resolve-release.outputs.tag }}" \
-            --arch "${{ matrix.arch }}" \
+            --pkg "dist/installers/moodle_darwin_${{ matrix.arch }}.pkg" \
             --output "dist/installers/moodle_darwin_${{ matrix.arch }}.dmg"
 
       - name: Upload DMG installer

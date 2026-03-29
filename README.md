@@ -6,7 +6,7 @@ CLI for FHGR Moodle with caching, course exports, and file downloads.
 
 ### Schnell installieren ohne Go
 Direkt aus den Releases:
-- macOS: `.dmg`
+- macOS: `.dmg` mit `.pkg` installer
 - Windows: `.exe` installer
 - Linux: `.tar.gz`
 
