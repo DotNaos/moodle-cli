@@ -119,52 +119,96 @@ jobs:
 
       - name: Warn when macOS signing is not configured
         env:
-          APPLE_INSTALLER_CERTIFICATE_P12: ${{ secrets.APPLE_INSTALLER_CERTIFICATE_P12 }}
-          APPLE_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERTIFICATE_PASSWORD }}
-          APPLE_INSTALLER_SIGNING_IDENTITY: ${{ secrets.APPLE_INSTALLER_SIGNING_IDENTITY }}
+          APPLE_APPLICATION_CERTIFICATE_P12: ${{ secrets.APPLE_APPLICATION_CERTIFICATE_P12 }}
+          APPLE_APPLICATION_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_APPLICATION_CERTIFICATE_PASSWORD }}
+          APPLE_APPLICATION_SIGNING_IDENTITY: ${{ secrets.APPLE_APPLICATION_SIGNING_IDENTITY }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_NOTARY_APPLE_ID: ${{ secrets.APPLE_NOTARY_APPLE_ID }}
           APPLE_NOTARY_TEAM_ID: ${{ secrets.APPLE_NOTARY_TEAM_ID }}
           APPLE_NOTARY_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         run: |
-          missing=()
+          certificate_ready=false
+          notarization_ready=false
 
-          [[ -n "${APPLE_INSTALLER_CERTIFICATE_P12}" ]] || missing+=("APPLE_INSTALLER_CERTIFICATE_P12")
-          [[ -n "${APPLE_INSTALLER_CERTIFICATE_PASSWORD}" ]] || missing+=("APPLE_INSTALLER_CERTIFICATE_PASSWORD")
-          [[ -n "${APPLE_INSTALLER_SIGNING_IDENTITY}" ]] || missing+=("APPLE_INSTALLER_SIGNING_IDENTITY")
-          [[ -n "${APPLE_NOTARY_APPLE_ID}" ]] || missing+=("APPLE_NOTARY_APPLE_ID")
-          [[ -n "${APPLE_NOTARY_TEAM_ID}" ]] || missing+=("APPLE_NOTARY_TEAM_ID")
-          [[ -n "${APPLE_NOTARY_PASSWORD}" ]] || missing+=("APPLE_NOTARY_PASSWORD")
-
-          if [[ ${#missing[@]} -gt 0 ]]; then
-            printf '::warning::macOS installer will be unsigned or unnotarized because these secrets are missing: %s\n' "$(IFS=', '; echo "${missing[*]}")"
+          if [[ -n "${APPLE_APPLICATION_CERTIFICATE_P12}" && -n "${APPLE_APPLICATION_CERTIFICATE_PASSWORD}" ]]; then
+            certificate_ready=true
+          elif [[ -n "${CSC_LINK}" && -n "${CSC_KEY_PASSWORD}" ]]; then
+            certificate_ready=true
           fi
 
-      - name: Import Apple installer certificate
-        if: secrets.APPLE_INSTALLER_CERTIFICATE_P12 != '' && secrets.APPLE_INSTALLER_CERTIFICATE_PASSWORD != '' && secrets.APPLE_INSTALLER_SIGNING_IDENTITY != ''
+          if [[ -n "${APPLE_NOTARY_APPLE_ID}" && -n "${APPLE_NOTARY_TEAM_ID}" && -n "${APPLE_NOTARY_PASSWORD}" ]]; then
+            notarization_ready=true
+          elif [[ -n "${APPLE_ID}" && -n "${APPLE_TEAM_ID}" && -n "${APPLE_APP_SPECIFIC_PASSWORD}" ]]; then
+            notarization_ready=true
+          fi
+
+          if [[ "${certificate_ready}" != "true" ]]; then
+            echo "::warning::macOS app bundle will be unsigned because neither APPLE_APPLICATION_CERTIFICATE_* nor CSC_* secrets are configured."
+          fi
+
+          if [[ "${notarization_ready}" != "true" ]]; then
+            echo "::warning::macOS app bundle will not be notarized because neither APPLE_NOTARY_* nor APPLE_ID/APPLE_TEAM_ID/APPLE_APP_SPECIFIC_PASSWORD secrets are configured."
+          fi
+
+      - name: Import Apple application certificate
+        if: (secrets.APPLE_APPLICATION_CERTIFICATE_P12 != '' && secrets.APPLE_APPLICATION_CERTIFICATE_PASSWORD != '') || (secrets.CSC_LINK != '' && secrets.CSC_KEY_PASSWORD != '')
         env:
-          APPLE_INSTALLER_CERTIFICATE_P12: ${{ secrets.APPLE_INSTALLER_CERTIFICATE_P12 }}
-          APPLE_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERTIFICATE_PASSWORD }}
+          APPLE_APPLICATION_CERTIFICATE_P12: ${{ secrets.APPLE_APPLICATION_CERTIFICATE_P12 }}
+          APPLE_APPLICATION_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_APPLICATION_CERTIFICATE_PASSWORD }}
+          APPLE_APPLICATION_SIGNING_IDENTITY: ${{ secrets.APPLE_APPLICATION_SIGNING_IDENTITY }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_NOTARY_APPLE_ID: ${{ secrets.APPLE_NOTARY_APPLE_ID }}
+          APPLE_NOTARY_TEAM_ID: ${{ secrets.APPLE_NOTARY_TEAM_ID }}
+          APPLE_NOTARY_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         run: |
           keychain_path="${RUNNER_TEMP}/moodle-release.keychain-db"
           keychain_password="$(openssl rand -hex 24)"
-          certificate_path="${RUNNER_TEMP}/moodle-installer-cert.p12"
+          certificate_path="${RUNNER_TEMP}/moodle-application-cert.p12"
 
-          printf '%s' "${APPLE_INSTALLER_CERTIFICATE_P12}" | base64 --decode > "${certificate_path}"
+          python3 -c 'import base64, os, pathlib, sys, urllib.parse; certificate_value = os.environ.get("APPLE_APPLICATION_CERTIFICATE_P12") or os.environ.get("CSC_LINK") or ""; assert certificate_value, "missing application certificate secret"; cert_bytes = (base64.b64decode(certificate_value.split(",", 1)[1]) if certificate_value.startswith("data:") and ";base64" in certificate_value.split(",", 1)[0] else urllib.parse.unquote_to_bytes(certificate_value.split(",", 1)[1]) if certificate_value.startswith("data:") else base64.b64decode(certificate_value)); pathlib.Path(sys.argv[1]).write_bytes(cert_bytes)' "${certificate_path}"
+
+          certificate_password="${APPLE_APPLICATION_CERTIFICATE_PASSWORD:-${CSC_KEY_PASSWORD}}"
 
           security create-keychain -p "${keychain_password}" "${keychain_path}"
           security set-keychain-settings -lut 21600 "${keychain_path}"
           security unlock-keychain -p "${keychain_password}" "${keychain_path}"
           security import "${certificate_path}" \
             -k "${keychain_path}" \
-            -P "${APPLE_INSTALLER_CERTIFICATE_PASSWORD}" \
+            -P "${certificate_password}" \
             -f pkcs12 \
             -A
           security list-keychains -d user -s "${keychain_path}" $(security list-keychains -d user | tr -d '"')
-          security set-key-partition-list -S apple-tool:,apple:,codesign:,productsign: -s -k "${keychain_password}" "${keychain_path}"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "${keychain_password}" "${keychain_path}"
+
+          application_identity="${APPLE_APPLICATION_SIGNING_IDENTITY:-}"
+          if [[ -z "${application_identity}" ]]; then
+            application_identity="$(security find-identity -v -p codesigning "${keychain_path}" | sed -n 's/.*\"\\(Developer ID Application: [^\"]*\\)\".*/\\1/p' | head -n1)"
+          fi
+
+          if [[ -z "${application_identity}" ]]; then
+            echo "::error::No Developer ID Application identity found in the imported certificate."
+            exit 1
+          fi
+
+          notary_apple_id="${APPLE_NOTARY_APPLE_ID:-${APPLE_ID}}"
+          notary_team_id="${APPLE_NOTARY_TEAM_ID:-${APPLE_TEAM_ID}}"
+          notary_password="${APPLE_NOTARY_PASSWORD:-${APPLE_APP_SPECIFIC_PASSWORD}}"
 
           {
             echo "MACOS_SIGNING_KEYCHAIN=${keychain_path}"
             echo "MACOS_SIGNING_KEYCHAIN_PASSWORD=${keychain_password}"
+            echo "MACOS_APPLICATION_SIGNING_IDENTITY=${application_identity}"
+            echo "MACOS_NOTARY_APPLE_ID=${notary_apple_id}"
+            echo "MACOS_NOTARY_TEAM_ID=${notary_team_id}"
+            echo "MACOS_NOTARY_PASSWORD=${notary_password}"
           } >> "${GITHUB_ENV}"
 
       - name: Download release archive
@@ -176,43 +220,55 @@ jobs:
             --pattern "moodle_darwin_${{ matrix.arch }}.tar.gz" \
             --dir dist/downloads
 
-      - name: Build PKG installer
-        env:
-          APPLE_INSTALLER_SIGNING_IDENTITY: ${{ secrets.APPLE_INSTALLER_SIGNING_IDENTITY }}
+      - name: Build app bundle
         run: |
           mkdir -p dist/installers
-          signing_args=()
-          if [[ -n "${APPLE_INSTALLER_SIGNING_IDENTITY}" ]]; then
-            signing_args+=(--signing-identity "${APPLE_INSTALLER_SIGNING_IDENTITY}")
-          fi
-          bash packaging/macos/build-pkg.sh \
+          bash packaging/macos/build-app.sh \
             --archive "dist/downloads/moodle_darwin_${{ matrix.arch }}.tar.gz" \
             --version "${{ needs.resolve-release.outputs.tag }}" \
-            --output "dist/installers/moodle_darwin_${{ matrix.arch }}.pkg" \
-            "${signing_args[@]}"
+            --output "dist/installers/moodle-cli.app"
 
-      - name: Notarize PKG installer
-        if: secrets.APPLE_INSTALLER_SIGNING_IDENTITY != '' && secrets.APPLE_NOTARY_APPLE_ID != '' && secrets.APPLE_NOTARY_TEAM_ID != '' && secrets.APPLE_NOTARY_PASSWORD != ''
-        env:
-          APPLE_NOTARY_APPLE_ID: ${{ secrets.APPLE_NOTARY_APPLE_ID }}
-          APPLE_NOTARY_TEAM_ID: ${{ secrets.APPLE_NOTARY_TEAM_ID }}
-          APPLE_NOTARY_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
+      - name: Sign app bundle
+        if: env.MACOS_APPLICATION_SIGNING_IDENTITY != ''
         run: |
-          pkg_path="dist/installers/moodle_darwin_${{ matrix.arch }}.pkg"
-          xcrun notarytool submit "${pkg_path}" \
-            --apple-id "${APPLE_NOTARY_APPLE_ID}" \
-            --team-id "${APPLE_NOTARY_TEAM_ID}" \
-            --password "${APPLE_NOTARY_PASSWORD}" \
+          app_path="dist/installers/moodle-cli.app"
+          codesign --force --deep --options runtime --timestamp \
+            --keychain "${MACOS_SIGNING_KEYCHAIN}" \
+            --sign "${MACOS_APPLICATION_SIGNING_IDENTITY}" \
+            "${app_path}"
+          codesign --verify --deep --strict --verbose=2 "${app_path}"
+
+      - name: Notarize app bundle
+        if: env.MACOS_APPLICATION_SIGNING_IDENTITY != '' && env.MACOS_NOTARY_APPLE_ID != '' && env.MACOS_NOTARY_TEAM_ID != '' && env.MACOS_NOTARY_PASSWORD != ''
+        run: |
+          app_path="dist/installers/moodle-cli.app"
+          zip_path="dist/installers/moodle_darwin_${{ matrix.arch }}.zip"
+          ditto -c -k --keepParent "${app_path}" "${zip_path}"
+          xcrun notarytool submit "${zip_path}" \
+            --apple-id "${MACOS_NOTARY_APPLE_ID}" \
+            --team-id "${MACOS_NOTARY_TEAM_ID}" \
+            --password "${MACOS_NOTARY_PASSWORD}" \
             --wait
-          xcrun stapler staple "${pkg_path}"
+          xcrun stapler staple "${app_path}"
 
       - name: Build DMG installer
         run: |
           mkdir -p dist/installers
           bash packaging/macos/create-dmg.sh \
             --version "${{ needs.resolve-release.outputs.tag }}" \
-            --pkg "dist/installers/moodle_darwin_${{ matrix.arch }}.pkg" \
+            --app "dist/installers/moodle-cli.app" \
             --output "dist/installers/moodle_darwin_${{ matrix.arch }}.dmg"
+
+      - name: Notarize DMG installer
+        if: env.MACOS_APPLICATION_SIGNING_IDENTITY != '' && env.MACOS_NOTARY_APPLE_ID != '' && env.MACOS_NOTARY_TEAM_ID != '' && env.MACOS_NOTARY_PASSWORD != ''
+        run: |
+          dmg_path="dist/installers/moodle_darwin_${{ matrix.arch }}.dmg"
+          xcrun notarytool submit "${dmg_path}" \
+            --apple-id "${MACOS_NOTARY_APPLE_ID}" \
+            --team-id "${MACOS_NOTARY_TEAM_ID}" \
+            --password "${MACOS_NOTARY_PASSWORD}" \
+            --wait
+          xcrun stapler staple "${dmg_path}"
 
       - name: Upload DMG installer
         env:

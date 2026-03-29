@@ -2,7 +2,7 @@
 set -euo pipefail
 
 version=""
-pkg=""
+app=""
 output=""
 
 while [[ $# -gt 0 ]]; do
@@ -11,8 +11,8 @@ while [[ $# -gt 0 ]]; do
       version="$2"
       shift 2
       ;;
-    --pkg)
-      pkg="$2"
+    --app)
+      app="$2"
       shift 2
       ;;
     --output)
@@ -26,8 +26,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "${version}" || -z "${pkg}" || -z "${output}" ]]; then
-  echo "Usage: $0 --version <tag> --pkg <path> --output <path>" >&2
+if [[ -z "${version}" || -z "${app}" || -z "${output}" ]]; then
+  echo "Usage: $0 --version <tag> --app <path> --output <path>" >&2
   exit 1
 fi
 
@@ -45,7 +45,8 @@ cleanup() {
 trap cleanup EXIT
 
 mkdir -p "${stage_dir}"
-cp "${pkg}" "${stage_dir}/moodle-cli.pkg"
+cp -R "${app}" "${stage_dir}/moodle-cli.app"
+ln -s /Applications "${stage_dir}/Applications"
 
 mkdir -p "$(dirname "${output}")"
 rm -f "${output}"
@@ -93,13 +94,20 @@ if [[ -n "${device}" && -n "${mount_dir}" ]] && command -v osascript >/dev/null 
 tell application "Finder"
   tell disk "${volume_name}"
     open
+    delay 1
     set current view of container window to icon view
     set toolbar visible of container window to false
     set statusbar visible of container window to false
-    set bounds of container window to {160, 120, 680, 480}
-    set icon size of icon view options of container window to 112
+    set bounds of container window to {160, 120, 860, 500}
+    set icon size of icon view options of container window to 128
     set arrangement of icon view options of container window to not arranged
-    set position of item "moodle-cli.pkg" of container window to {260, 170}
+    close
+    open
+    delay 1
+    set position of item "moodle-cli" of container window to {210, 190}
+    set position of item "Applications" of container window to {520, 190}
+    close
+    open
     update without registering applications
     delay 1
     close

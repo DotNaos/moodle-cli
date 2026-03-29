@@ -6,7 +6,7 @@ CLI for FHGR Moodle with caching, course exports, and file downloads.
 
 ### Schnell installieren ohne Go
 Direkt aus den Releases:
-- macOS: `.dmg` mit `.pkg` installer
+- macOS: drag-and-drop `.dmg` with `moodle-cli.app`
 - Windows: `.exe` installer
 - Linux: `.tar.gz`
 
@@ -15,7 +15,8 @@ Release channels:
 - `unstable`: prereleases updated from pull requests for testing before merge, named like the current stable version plus a `canary.<branch>.<attempt>` suffix
 
 macOS note:
-- the `.pkg` release is signed and notarized when the Apple release secrets are configured in GitHub Actions; without those secrets, macOS will warn before opening it
+- the `.app` release is signed and notarized when the Apple release secrets are configured in GitHub Actions; without those secrets, macOS will warn before opening it
+- after dragging `moodle-cli.app` into `Applications`, open it once to link the `moodle` command into `~/.local/bin`
 
 macOS / Linux:
 ```sh
