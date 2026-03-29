@@ -4,6 +4,7 @@ set -euo pipefail
 archive=""
 version=""
 output=""
+signing_identity=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -17,6 +18,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --output)
       output="$2"
+      shift 2
+      ;;
+    --signing-identity)
+      signing_identity="$2"
       shift 2
       ;;
     *)
@@ -44,9 +49,17 @@ xattr -cr "${work_dir}/payload"
 mkdir -p "$(dirname "${output}")"
 rm -f "${output}"
 
+pkgbuild_args=(
+  --root "${work_dir}/payload"
+  --identifier "com.dotnaos.moodle-cli"
+  --version "${version#v}"
+  --install-location "/"
+)
+
+if [[ -n "${signing_identity}" ]]; then
+  pkgbuild_args+=(--sign "${signing_identity}")
+fi
+
 pkgbuild \
-  --root "${work_dir}/payload" \
-  --identifier "com.dotnaos.moodle-cli" \
-  --version "${version#v}" \
-  --install-location "/" \
+  "${pkgbuild_args[@]}" \
   "${output}"

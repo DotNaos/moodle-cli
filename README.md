@@ -14,6 +14,9 @@ Release channels:
 - `stable`: created from `main`
 - `unstable`: prereleases updated from pull requests for testing before merge, named like the current stable version plus a `canary.<branch>.<attempt>` suffix
 
+macOS note:
+- the `.pkg` release is signed and notarized when the Apple release secrets are configured in GitHub Actions; without those secrets, macOS will warn before opening it
+
 macOS / Linux:
 ```sh
 curl -fsSL https://raw.githubusercontent.com/DotNaos/moodle-cli/main/scripts/install.sh | bash

@@ -117,6 +117,56 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Warn when macOS signing is not configured
+        env:
+          APPLE_INSTALLER_CERTIFICATE_P12: ${{ secrets.APPLE_INSTALLER_CERTIFICATE_P12 }}
+          APPLE_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERTIFICATE_PASSWORD }}
+          APPLE_INSTALLER_SIGNING_IDENTITY: ${{ secrets.APPLE_INSTALLER_SIGNING_IDENTITY }}
+          APPLE_NOTARY_APPLE_ID: ${{ secrets.APPLE_NOTARY_APPLE_ID }}
+          APPLE_NOTARY_TEAM_ID: ${{ secrets.APPLE_NOTARY_TEAM_ID }}
+          APPLE_NOTARY_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
+        run: |
+          missing=()
+
+          [[ -n "${APPLE_INSTALLER_CERTIFICATE_P12}" ]] || missing+=("APPLE_INSTALLER_CERTIFICATE_P12")
+          [[ -n "${APPLE_INSTALLER_CERTIFICATE_PASSWORD}" ]] || missing+=("APPLE_INSTALLER_CERTIFICATE_PASSWORD")
+          [[ -n "${APPLE_INSTALLER_SIGNING_IDENTITY}" ]] || missing+=("APPLE_INSTALLER_SIGNING_IDENTITY")
+          [[ -n "${APPLE_NOTARY_APPLE_ID}" ]] || missing+=("APPLE_NOTARY_APPLE_ID")
+          [[ -n "${APPLE_NOTARY_TEAM_ID}" ]] || missing+=("APPLE_NOTARY_TEAM_ID")
+          [[ -n "${APPLE_NOTARY_PASSWORD}" ]] || missing+=("APPLE_NOTARY_PASSWORD")
+
+          if [[ ${#missing[@]} -gt 0 ]]; then
+            printf '::warning::macOS installer will be unsigned or unnotarized because these secrets are missing: %s\n' "$(IFS=', '; echo "${missing[*]}")"
+          fi
+
+      - name: Import Apple installer certificate
+        if: secrets.APPLE_INSTALLER_CERTIFICATE_P12 != '' && secrets.APPLE_INSTALLER_CERTIFICATE_PASSWORD != '' && secrets.APPLE_INSTALLER_SIGNING_IDENTITY != ''
+        env:
+          APPLE_INSTALLER_CERTIFICATE_P12: ${{ secrets.APPLE_INSTALLER_CERTIFICATE_P12 }}
+          APPLE_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERTIFICATE_PASSWORD }}
+        run: |
+          keychain_path="${RUNNER_TEMP}/moodle-release.keychain-db"
+          keychain_password="$(openssl rand -hex 24)"
+          certificate_path="${RUNNER_TEMP}/moodle-installer-cert.p12"
+
+          printf '%s' "${APPLE_INSTALLER_CERTIFICATE_P12}" | base64 --decode > "${certificate_path}"
+
+          security create-keychain -p "${keychain_password}" "${keychain_path}"
+          security set-keychain-settings -lut 21600 "${keychain_path}"
+          security unlock-keychain -p "${keychain_password}" "${keychain_path}"
+          security import "${certificate_path}" \
+            -k "${keychain_path}" \
+            -P "${APPLE_INSTALLER_CERTIFICATE_PASSWORD}" \
+            -f pkcs12 \
+            -A
+          security list-keychains -d user -s "${keychain_path}" $(security list-keychains -d user | tr -d '"')
+          security set-key-partition-list -S apple-tool:,apple:,codesign:,productsign: -s -k "${keychain_password}" "${keychain_path}"
+
+          {
+            echo "MACOS_SIGNING_KEYCHAIN=${keychain_path}"
+            echo "MACOS_SIGNING_KEYCHAIN_PASSWORD=${keychain_password}"
+          } >> "${GITHUB_ENV}"
+
       - name: Download release archive
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -127,12 +177,34 @@ jobs:
             --dir dist/downloads
 
       - name: Build PKG installer
+        env:
+          APPLE_INSTALLER_SIGNING_IDENTITY: ${{ secrets.APPLE_INSTALLER_SIGNING_IDENTITY }}
         run: |
           mkdir -p dist/installers
+          signing_args=()
+          if [[ -n "${APPLE_INSTALLER_SIGNING_IDENTITY}" ]]; then
+            signing_args+=(--signing-identity "${APPLE_INSTALLER_SIGNING_IDENTITY}")
+          fi
           bash packaging/macos/build-pkg.sh \
             --archive "dist/downloads/moodle_darwin_${{ matrix.arch }}.tar.gz" \
             --version "${{ needs.resolve-release.outputs.tag }}" \
-            --output "dist/installers/moodle_darwin_${{ matrix.arch }}.pkg"
+            --output "dist/installers/moodle_darwin_${{ matrix.arch }}.pkg" \
+            "${signing_args[@]}"
+
+      - name: Notarize PKG installer
+        if: secrets.APPLE_INSTALLER_SIGNING_IDENTITY != '' && secrets.APPLE_NOTARY_APPLE_ID != '' && secrets.APPLE_NOTARY_TEAM_ID != '' && secrets.APPLE_NOTARY_PASSWORD != ''
+        env:
+          APPLE_NOTARY_APPLE_ID: ${{ secrets.APPLE_NOTARY_APPLE_ID }}
+          APPLE_NOTARY_TEAM_ID: ${{ secrets.APPLE_NOTARY_TEAM_ID }}
+          APPLE_NOTARY_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
+        run: |
+          pkg_path="dist/installers/moodle_darwin_${{ matrix.arch }}.pkg"
+          xcrun notarytool submit "${pkg_path}" \
+            --apple-id "${APPLE_NOTARY_APPLE_ID}" \
+            --team-id "${APPLE_NOTARY_TEAM_ID}" \
+            --password "${APPLE_NOTARY_PASSWORD}" \
+            --wait
+          xcrun stapler staple "${pkg_path}"
 
       - name: Build DMG installer
         run: |
@@ -149,6 +221,11 @@ jobs:
           gh release upload "${{ needs.resolve-release.outputs.tag }}" \
             "dist/installers/moodle_darwin_${{ matrix.arch }}.dmg" \
             --clobber
+
+      - name: Clean up Apple signing keychain
+        if: always() && env.MACOS_SIGNING_KEYCHAIN != ''
+        run: |
+          security delete-keychain "${MACOS_SIGNING_KEYCHAIN}" || true
 
   windows-installers:
     needs:
