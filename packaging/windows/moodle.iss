@@ -90,9 +90,10 @@ begin
   if not RegQueryStringValue(HKCU, 'Environment', 'Path', Paths) then
     exit;
 
-  Updated := StringChangeEx(';' + Paths + ';', ';' + Path + ';', ';', True);
+  Updated := ';' + Paths + ';';
+  StringChangeEx(Updated, ';' + Path + ';', ';', True);
   while Pos(';;', Updated) > 0 do
-    Updated := StringChangeEx(Updated, ';;', ';', True);
+    StringChangeEx(Updated, ';;', ';', True);
 
   if (Length(Updated) > 0) and (Copy(Updated, 1, 1) = ';') then
     Delete(Updated, 1, 1);

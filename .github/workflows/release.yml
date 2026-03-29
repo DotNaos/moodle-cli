@@ -10,6 +10,15 @@ on:
         description: Release tag to publish
         required: true
         type: string
+      prerelease:
+        description: Mark the release as unstable
+        required: false
+        default: false
+        type: boolean
+      release_name:
+        description: Optional release title override
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -20,12 +29,16 @@ jobs:
     outputs:
       tag: ${{ steps.resolve.outputs.tag }}
       ref: ${{ steps.resolve.outputs.ref }}
+      prerelease: ${{ steps.resolve.outputs.prerelease }}
+      release_name: ${{ steps.resolve.outputs.release_name }}
     steps:
       - name: Resolve release tag
         id: resolve
         shell: bash
         env:
           INPUT_TAG: ${{ github.event.inputs.tag }}
+          INPUT_PRERELEASE: ${{ github.event.inputs.prerelease }}
+          INPUT_RELEASE_NAME: ${{ github.event.inputs.release_name }}
         run: |
           set -euo pipefail
 
@@ -34,8 +47,13 @@ jobs:
             release_tag="${GITHUB_REF_NAME}"
           fi
 
+          prerelease="${INPUT_PRERELEASE:-false}"
+          release_name="${INPUT_RELEASE_NAME:-${release_tag}}"
+
           echo "tag=${release_tag}" >> "${GITHUB_OUTPUT}"
           echo "ref=${release_tag}" >> "${GITHUB_OUTPUT}"
+          echo "prerelease=${prerelease}" >> "${GITHUB_OUTPUT}"
+          echo "release_name=${release_name}" >> "${GITHUB_OUTPUT}"
 
   release:
     needs: resolve-release
@@ -73,6 +91,17 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update release metadata
+        if: needs.resolve-release.outputs.prerelease == 'true' || needs.resolve-release.outputs.release_name != needs.resolve-release.outputs.tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          args=(--title "${{ needs.resolve-release.outputs.release_name }}")
+          if [[ "${{ needs.resolve-release.outputs.prerelease }}" == "true" ]]; then
+            args+=(--prerelease)
+          fi
+          gh release edit "${{ needs.resolve-release.outputs.tag }}" "${args[@]}"
 
   macos-installers:
     needs:
