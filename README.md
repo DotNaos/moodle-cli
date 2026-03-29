@@ -5,6 +5,11 @@ CLI for FHGR Moodle with caching, course exports, and file downloads.
 ## Quickstart
 
 ### Schnell installieren ohne Go
+Direkt aus den Releases:
+- macOS: `.dmg`
+- Windows: `.exe` installer
+- Linux: `.tar.gz`
+
 macOS / Linux:
 ```sh
 curl -fsSL https://raw.githubusercontent.com/DotNaos/moodle-cli/main/scripts/install.sh | bash

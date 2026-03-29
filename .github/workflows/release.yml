@@ -5,17 +5,46 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 jobs:
+  resolve-release:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      ref: ${{ steps.resolve.outputs.ref }}
+    steps:
+      - name: Resolve release tag
+        id: resolve
+        shell: bash
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+
+          release_tag="${INPUT_TAG:-}"
+          if [[ -z "${release_tag}" ]]; then
+            release_tag="${GITHUB_REF_NAME}"
+          fi
+
+          echo "tag=${release_tag}" >> "${GITHUB_OUTPUT}"
+          echo "ref=${release_tag}" >> "${GITHUB_OUTPUT}"
+
   release:
+    needs: resolve-release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          ref: ${{ needs.resolve-release.outputs.ref }}
 
       - uses: actions/setup-go@v6
         with:
@@ -25,10 +54,109 @@ jobs:
       - name: Run tests
         run: go test ./...
 
+      - name: Check if release already exists
+        id: release_state
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "${{ needs.resolve-release.outputs.tag }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "exists=false" >> "${GITHUB_OUTPUT}"
+          fi
+
       - name: Run GoReleaser
+        if: github.event_name == 'push' || steps.release_state.outputs.exists != 'true'
         uses: goreleaser/goreleaser-action@v6
         with:
           version: latest
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  macos-installers:
+    needs:
+      - resolve-release
+      - release
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - amd64
+          - arm64
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Download release archive
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p dist/downloads
+          gh release download "${{ needs.resolve-release.outputs.tag }}" \
+            --pattern "moodle_darwin_${{ matrix.arch }}.tar.gz" \
+            --dir dist/downloads
+
+      - name: Build DMG installer
+        run: |
+          mkdir -p dist/installers
+          bash packaging/macos/create-dmg.sh \
+            --archive "dist/downloads/moodle_darwin_${{ matrix.arch }}.tar.gz" \
+            --version "${{ needs.resolve-release.outputs.tag }}" \
+            --arch "${{ matrix.arch }}" \
+            --output "dist/installers/moodle_darwin_${{ matrix.arch }}.dmg"
+
+      - name: Upload DMG installer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ needs.resolve-release.outputs.tag }}" \
+            "dist/installers/moodle_darwin_${{ matrix.arch }}.dmg" \
+            --clobber
+
+  windows-installers:
+    needs:
+      - resolve-release
+      - release
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - amd64
+          - arm64
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --no-progress -y
+
+      - name: Download release archive
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          New-Item -ItemType Directory -Force -Path dist\downloads | Out-Null
+          gh release download "${{ needs.resolve-release.outputs.tag }}" `
+            --pattern "moodle_windows_${{ matrix.arch }}.zip" `
+            --dir dist\downloads
+
+      - name: Build EXE installer
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path dist\installers | Out-Null
+          .\packaging\windows\build-installer.ps1 `
+            -ArchivePath "dist\downloads\moodle_windows_${{ matrix.arch }}.zip" `
+            -Version "${{ needs.resolve-release.outputs.tag }}" `
+            -Arch "${{ matrix.arch }}" `
+            -OutputDir "dist\installers"
+
+      - name: Upload EXE installer
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ needs.resolve-release.outputs.tag }}" `
+            "dist\installers\moodle_windows_${{ matrix.arch }}_setup.exe" `
+            --clobber
