@@ -232,11 +232,20 @@ jobs:
             --version "${{ needs.resolve-release.outputs.tag }}" \
             --output "dist/installers/moodle-cli.app"
 
+      - name: Sign app bundle contents
+        if: env.MACOS_APPLICATION_SIGNING_IDENTITY != ''
+        run: |
+          app_path="dist/installers/moodle-cli.app"
+          codesign --force --options runtime --timestamp \
+            --keychain "${MACOS_SIGNING_KEYCHAIN}" \
+            --sign "${MACOS_APPLICATION_SIGNING_IDENTITY}" \
+            "${app_path}/Contents/Resources/bin/moodle"
+
       - name: Sign app bundle
         if: env.MACOS_APPLICATION_SIGNING_IDENTITY != ''
         run: |
           app_path="dist/installers/moodle-cli.app"
-          codesign --force --deep --options runtime --timestamp \
+          codesign --force --options runtime --timestamp \
             --keychain "${MACOS_SIGNING_KEYCHAIN}" \
             --sign "${MACOS_APPLICATION_SIGNING_IDENTITY}" \
             "${app_path}"
