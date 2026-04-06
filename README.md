@@ -1,5 +1,7 @@
 # moodle-cli
 
+![moodle-cli icon](assets/moodle_cli_icon.png)
+
 CLI for FHGR Moodle with caching, course exports, and file downloads.
 
 ## Quickstart

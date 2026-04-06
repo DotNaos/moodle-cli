@@ -37,11 +37,30 @@ contents_dir="${app_dir}/Contents"
 macos_dir="${contents_dir}/MacOS"
 resources_dir="${contents_dir}/Resources"
 binary_dir="${resources_dir}/bin"
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+source_icon="${script_dir}/../../assets/moodle_cli_icon.png"
 trap 'rm -rf "${work_dir}"' EXIT
 
 mkdir -p "${macos_dir}" "${binary_dir}"
 COPYFILE_DISABLE=1 tar -xzf "${archive}" -C "${work_dir}"
 install -m 0755 "${work_dir}/moodle" "${binary_dir}/moodle"
+
+if [[ ! -f "${source_icon}" ]]; then
+  echo "Missing app icon at ${source_icon}" >&2
+  exit 1
+fi
+
+iconset_dir="${work_dir}/moodle-cli.iconset"
+mkdir -p "${iconset_dir}"
+for size in 16 32 64 128 256 512; do
+  sips -z "${size}" "${size}" "${source_icon}" --out "${iconset_dir}/icon_${size}x${size}.png" >/dev/null
+done
+sips -z 32 32 "${source_icon}" --out "${iconset_dir}/icon_16x16@2x.png" >/dev/null
+sips -z 64 64 "${source_icon}" --out "${iconset_dir}/icon_32x32@2x.png" >/dev/null
+sips -z 256 256 "${source_icon}" --out "${iconset_dir}/icon_128x128@2x.png" >/dev/null
+sips -z 512 512 "${source_icon}" --out "${iconset_dir}/icon_256x256@2x.png" >/dev/null
+sips -z 1024 1024 "${source_icon}" --out "${iconset_dir}/icon_512x512@2x.png" >/dev/null
+iconutil -c icns "${iconset_dir}" -o "${resources_dir}/moodle-cli.icns"
 
 cat > "${contents_dir}/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -58,6 +77,8 @@ cat > "${contents_dir}/Info.plist" <<EOF
   <string>com.dotnaos.moodle-cli</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
+  <key>CFBundleIconFile</key>
+  <string>moodle-cli.icns</string>
   <key>CFBundleName</key>
   <string>moodle-cli</string>
   <key>CFBundlePackageType</key>
