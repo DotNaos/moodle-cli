@@ -1,0 +1,115 @@
+package api
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/DotNaos/moodle-cli/internal/moodle"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+)
+
+// Client is the subset of the Moodle client used by the API server.
+type Client interface {
+	ValidateSession() error
+	FetchCourses() ([]moodle.Course, error)
+	FetchCourseResources(courseID string) ([]moodle.Resource, string, error)
+}
+
+// ServerOptions configure the HTTP router.
+type ServerOptions struct {
+	ClientProvider func() (Client, error)
+}
+
+// NewRouter builds a chi router exposing the REST API.
+func NewRouter(opts ServerOptions) (*chi.Mux, error) {
+	if opts.ClientProvider == nil {
+		return nil, fmt.Errorf("client provider is required")
+	}
+
+	router := chi.NewRouter()
+	router.Use(
+		middleware.RequestID,
+		middleware.RealIP,
+		middleware.Logger,
+		middleware.Recoverer,
+		middleware.Timeout(60*time.Second),
+	)
+
+	router.Get("/healthz", healthHandler(opts))
+	router.Get("/api/courses", coursesHandler(opts))
+	router.Get("/api/courses/{courseID}/resources", courseResourcesHandler(opts))
+
+	return router, nil
+}
+
+func healthHandler(opts ServerOptions) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		client, err := opts.ClientProvider()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		if err := client.ValidateSession(); err != nil {
+			status := http.StatusBadGateway
+			if errors.Is(err, moodle.ErrSessionExpired) {
+				status = http.StatusUnauthorized
+			}
+			writeError(w, status, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	}
+}
+
+func coursesHandler(opts ServerOptions) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		client, err := opts.ClientProvider()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		courses, err := client.FetchCourses()
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, courses)
+	}
+}
+
+func courseResourcesHandler(opts ServerOptions) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		courseID := strings.TrimSpace(chi.URLParam(r, "courseID"))
+		if courseID == "" {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("courseID is required"))
+			return
+		}
+
+		client, err := opts.ClientProvider()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		resources, _, err := client.FetchCourseResources(courseID)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, resources)
+	}
+}
+
+func writeJSON(w http.ResponseWriter, status int, payload interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func writeError(w http.ResponseWriter, status int, err error) {
+	writeJSON(w, status, map[string]string{"error": err.Error()})
+}

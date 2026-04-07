@@ -90,6 +90,19 @@ moodle open resource <course-id|name|current|0> <resource-id|name|current|0>
 ```
 Note: `moodle` is available on PATH in this workspace; avoid sourcing `~/.zshrc` from non-interactive shell commands because it loads interactive prompt setup.
 
+### REST API mode
+Start the long-running API server:
+```sh
+moodle serve --addr :8080
+```
+
+Endpoints (JSON):
+- `GET /healthz` – validates the saved Moodle session
+- `GET /api/courses` – lists enrolled courses
+- `GET /api/courses/{courseID}/resources` – lists files/resources for a course
+
+The server uses the same config and session files as the CLI (see paths below).
+
 ### Updates
 - `moodle update --check` checks whether a newer stable release is available.
 - `moodle update` downloads and installs the latest stable release automatically.
@@ -116,6 +129,33 @@ source <(moodle completion zsh)
 - File cache: `~/.moodle-cli/files/`
 - CLI state: `~/.moodle-cli/state.json`
 - Output: `~/Downloads/moodle/`
+
+## Container usage
+Build the image locally:
+```sh
+docker build -t ghcr.io/dotnaos/moodle-cli .
+```
+
+Run a one-off CLI command without installing Go:
+```sh
+docker run --rm \
+  -v ${HOME}/.moodle-cli:/data \
+  -e MOODLE_CLI_HOME=/data \
+  ghcr.io/dotnaos/moodle-cli list courses --json
+```
+
+Run the API server with Docker:
+```sh
+docker run --rm -p 8080:8080 \
+  -v ${HOME}/.moodle-cli:/data \
+  -e MOODLE_CLI_HOME=/data \
+  ghcr.io/dotnaos/moodle-cli serve --addr :8080
+```
+
+Run the API server with Docker Compose:
+```sh
+docker compose up
+```
 
 ## Commands
 - `moodle version`
