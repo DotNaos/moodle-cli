@@ -56,6 +56,7 @@ func init() {
 		tuiCmd,
 		versionCmd,
 		updateCmd,
+		serveCmd,
 	)
 }
 

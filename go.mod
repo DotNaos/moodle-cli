@@ -4,6 +4,9 @@ go 1.24.2
 
 require (
 	github.com/apognu/gocal v0.9.1
+	github.com/charmbracelet/bubbletea v1.3.4
+	github.com/charmbracelet/lipgloss v1.0.0
+	github.com/go-chi/chi/v5 v5.2.5
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/playwright-community/playwright-go v0.5200.1
 	github.com/spf13/cobra v1.10.2
@@ -12,8 +15,6 @@ require (
 require (
 	github.com/ChannelMeter/iso8601duration v0.0.0-20150204201828-8da3af7a2a61 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
-	github.com/charmbracelet/bubbletea v1.3.4 // indirect
-	github.com/charmbracelet/lipgloss v1.0.0 // indirect
 	github.com/charmbracelet/x/ansi v0.8.0 // indirect
 	github.com/charmbracelet/x/term v0.2.1 // indirect
 	github.com/deckarep/golang-set/v2 v2.7.0 // indirect
