@@ -232,7 +232,7 @@ func downloadResourceToTempFile(client *moodle.Client, resource moodle.Resource)
 	if err != nil {
 		return "", err
 	}
-	path := filepath.Join(tempDir, buildResourceFilename(resource))
+	path := filepath.Join(tempDir, buildDownloadedResourceFilename(resource, result.ContentType))
 	if err := os.WriteFile(path, result.Data, 0o644); err != nil {
 		return "", err
 	}

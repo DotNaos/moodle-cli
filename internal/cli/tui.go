@@ -1,11 +1,15 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
+	ver "github.com/DotNaos/moodle-cli/internal/version"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
@@ -23,8 +27,16 @@ type tuiNavigator interface {
 type paneFocus string
 
 const (
-	focusTree  paneFocus = "tree"
-	focusRight paneFocus = "right"
+	focusTree    paneFocus = "tree"
+	focusRight   paneFocus = "right"
+	focusPreview paneFocus = "preview"
+)
+
+type previewMode string
+
+const (
+	previewModeReader   previewMode = "reader"
+	previewModeMarkdown previewMode = "markdown"
 )
 
 type treeRow struct {
@@ -32,6 +44,7 @@ type treeRow struct {
 	Depth      int
 	HasKids    bool
 	Expanded   bool
+	Loading    bool
 	TopLevel   bool
 	QuickBand  bool
 	BrowseBand bool
@@ -53,25 +66,32 @@ type rightEntry struct {
 }
 
 type tuiModel struct {
-	nav           tuiNavigator
-	root          navNode
-	width         int
-	height        int
-	status        string
-	filterMode    bool
-	filterInput   string
-	leftFilter    string
-	rightFilter   string
-	previewCache  map[string]string
-	previewBusy   string
-	dialog        *downloadDialog
-	focus         paneFocus
-	selectedKey   string
-	rightSelected int
-	expanded      map[string]bool
-	nodeByKey     map[string]navNode
-	parentByKey   map[string]string
-	childCache    map[string][]navNode
+	nav             tuiNavigator
+	root            navNode
+	width           int
+	height          int
+	status          string
+	filterMode      bool
+	filterInput     string
+	leftFilter      string
+	rightFilter     string
+	previewCache    map[string]string
+	previewBusy     string
+	previewMode     previewMode
+	dialog          *downloadDialog
+	focus           paneFocus
+	selectedKey     string
+	rightSelected   int
+	expanded        map[string]bool
+	nodeByKey       map[string]navNode
+	parentByKey     map[string]string
+	childCache      map[string][]navNode
+	childBusy       map[string]bool
+	childErrors     map[string]string
+	spinnerFrame    int
+	previewViewport viewport.Model
+	topCollapsed    bool
+	lastUpperFocus  paneFocus
 }
 
 type tuiOpenMsg struct{ Err error }
@@ -81,6 +101,14 @@ type tuiPreviewMsg struct {
 	Text string
 	Err  error
 }
+
+type tuiChildrenMsg struct {
+	Parent   navNode
+	Children []navNode
+	Err      error
+}
+
+type tuiSpinnerMsg struct{}
 
 type tuiDownloadMsg struct {
 	Path string
@@ -133,61 +161,95 @@ func runTUI(options selectorOptions) error {
 	}
 	root := service.Root()
 	model := tuiModel{
-		nav:          service,
-		root:         root,
-		focus:        focusTree,
-		previewCache: map[string]string{},
-		expanded:     map[string]bool{root.Key: true},
-		nodeByKey:    map[string]navNode{root.Key: root},
-		parentByKey:  map[string]string{root.Key: ""},
-		childCache:   map[string][]navNode{},
+		nav:            service,
+		root:           root,
+		focus:          focusTree,
+		lastUpperFocus: focusTree,
+		previewCache:   map[string]string{},
+		expanded:       map[string]bool{root.Key: true},
+		nodeByKey:      map[string]navNode{root.Key: root},
+		parentByKey:    map[string]string{root.Key: ""},
+		childCache:     map[string][]navNode{},
+		childBusy:      map[string]bool{},
+		childErrors:    map[string]string{},
 	}
-	if _, err := model.ensureChildren(root); err != nil {
-		return err
-	}
-	rows := model.visibleTreeRows()
-	if len(rows) > 0 {
-		model.selectedKey = rows[0].Node.Key
-	} else {
-		model.selectedKey = root.Key
-	}
+	model.selectedKey = root.Key
 	program := tea.NewProgram(model, tea.WithAltScreen())
 	_, err = program.Run()
 	return err
 }
 
-func (m tuiModel) Init() tea.Cmd { return nil }
+func (m tuiModel) Init() tea.Cmd {
+	m.ensureState()
+	return tea.Batch(spinnerTickCmd(), m.requestChildrenCmd(m.root))
+}
 
 func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	m.ensureState()
+	m.syncPreviewViewportState()
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 		return m, nil
+	case tuiSpinnerMsg:
+		m.spinnerFrame = (m.spinnerFrame + 1) % len(spinnerFrames)
+		return m, spinnerTickCmd()
 	case tuiOpenMsg:
 		if msg.Err != nil {
-			m.status = msg.Err.Error()
+			logDebug("tui.open", "result: error", "error: "+msg.Err.Error())
+			m.status = presentUIError("tui.open", msg.Err)
 		} else {
+			logDebug("tui.open", "result: success")
 			m.status = "Opened."
 		}
 		return m, nil
 	case tuiPreviewMsg:
 		if msg.Err != nil {
-			m.status = msg.Err.Error()
+			logDebug("tui.print", "result: error", "error: "+msg.Err.Error())
+			m.status = presentUIError("tui.print", msg.Err)
 			m.previewBusy = ""
 			return m, nil
 		}
 		m.previewBusy = ""
 		m.previewCache[msg.Key] = msg.Text
+		logDebug("tui.print", "result: success", "key: "+msg.Key)
 		m.status = "Preview loaded."
 		return m, nil
 	case tuiDownloadMsg:
 		if msg.Err != nil {
-			m.status = msg.Err.Error()
+			logDebug("tui.download", "result: error", "error: "+msg.Err.Error())
+			m.status = presentUIError("tui.download", msg.Err)
 			return m, nil
 		}
 		m.dialog = nil
+		logDebug("tui.download", "result: success", "path: "+msg.Path)
 		m.status = "Saved to " + msg.Path
+		return m, nil
+	case tuiChildrenMsg:
+		delete(m.childBusy, msg.Parent.Key)
+		if msg.Err != nil {
+			logDebug("tui.children", "result: error", "parent: "+msg.Parent.Key, "error: "+msg.Err.Error())
+			displayErr := presentUIError("tui.children", msg.Err, "parent: "+msg.Parent.Key)
+			m.childErrors[msg.Parent.Key] = displayErr
+			m.status = displayErr
+			return m, nil
+		}
+		logDebug("tui.children", "result: success", "parent: "+msg.Parent.Key, fmt.Sprintf("count: %d", len(msg.Children)))
+		delete(m.childErrors, msg.Parent.Key)
+		m.childCache[msg.Parent.Key] = msg.Children
+		for _, child := range msg.Children {
+			m.nodeByKey[child.Key] = child
+			if _, ok := m.parentByKey[child.Key]; !ok {
+				m.parentByKey[child.Key] = msg.Parent.Key
+			}
+		}
+		if msg.Parent.Key == m.root.Key && m.selectedKey == m.root.Key {
+			if len(msg.Children) > 0 {
+				m.selectedKey = msg.Children[0].Key
+			}
+			return m, m.selectionChangedCmd()
+		}
 		return m, nil
 	case tea.KeyMsg:
 		if m.dialog != nil {
@@ -199,31 +261,106 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c", "q":
 			return m, tea.Quit
+		case "ctrl+h":
+			m.focus = focusTree
+			m.lastUpperFocus = focusTree
+			return m, nil
+		case "ctrl+l":
+			m.focus = focusRight
+			m.lastUpperFocus = focusRight
+			return m, nil
+		case "ctrl+j":
+			m.lastUpperFocus = m.currentUpperFocus()
+			m.focus = focusPreview
+			return m, nil
+		case "ctrl+k":
+			if m.focus == focusPreview {
+				m.focus = m.returnUpperFocus()
+				return m, nil
+			}
+		case "ctrl+w":
+			m.topCollapsed = !m.topCollapsed
+			if m.topCollapsed {
+				m.lastUpperFocus = m.currentUpperFocus()
+				m.focus = focusPreview
+			} else if m.focus == focusPreview {
+				m.focus = m.returnUpperFocus()
+			}
+			return m, nil
+		case "m":
+			m.togglePreviewMode()
+			return m, nil
 		case "/":
+			if m.focus == focusPreview {
+				return m, nil
+			}
 			m.filterMode = true
 			m.filterInput = m.currentFilter()
 			return m, nil
 		case "g":
+			if m.focus == focusPreview {
+				m.previewViewport.GotoTop()
+				return m, nil
+			}
 			m.setSelection(0)
-			return m, m.autoPreviewCmd()
+			return m, m.selectionChangedCmd()
 		case "G":
+			if m.focus == focusPreview {
+				m.previewViewport.GotoBottom()
+				return m, nil
+			}
 			m.setSelection(m.itemCount() - 1)
-			return m, m.autoPreviewCmd()
+			return m, m.selectionChangedCmd()
 		case "j", "down":
+			if m.focus == focusPreview {
+				m.previewViewport.LineDown(1)
+				return m, nil
+			}
 			m.moveSelection(1)
-			return m, m.autoPreviewCmd()
+			return m, m.selectionChangedCmd()
 		case "k", "up":
+			if m.focus == focusPreview {
+				m.previewViewport.LineUp(1)
+				return m, nil
+			}
 			m.moveSelection(-1)
-			return m, m.autoPreviewCmd()
+			return m, m.selectionChangedCmd()
+		case "ctrl+d":
+			if m.focus == focusPreview {
+				m.previewViewport.HalfPageDown()
+				return m, nil
+			}
+		case "ctrl+u":
+			if m.focus == focusPreview {
+				m.previewViewport.HalfPageUp()
+				return m, nil
+			}
 		case "h", "left":
+			if m.focus == focusPreview {
+				return m, nil
+			}
 			model, cmd := m.handleLeft()
-			return model, tea.Batch(cmd, m.autoPreviewCmd())
+			next := model.(tuiModel)
+			return next, tea.Batch(cmd, next.selectionChangedCmd())
 		case "l", "right":
+			if m.focus == focusPreview {
+				return m, nil
+			}
 			model, cmd := m.handleRight()
-			return model, tea.Batch(cmd, m.autoPreviewCmd())
+			next := model.(tuiModel)
+			return next, tea.Batch(cmd, next.selectionChangedCmd())
 		case "enter":
+			if m.focus == focusPreview {
+				return m, nil
+			}
+			if m.focus == focusRight {
+				if entry, ok := m.selectedRightEntry(); ok && entry.Kind == rightEntryAction {
+					return m.handleEnter()
+				}
+			}
 			model, cmd := m.handleEnter()
-			return model, tea.Batch(cmd, m.autoPreviewCmd())
+			next := model.(tuiModel)
+			return next, tea.Batch(cmd, next.selectionChangedCmd())
 		case "o":
 			return m.handleActionShortcut("open")
 		case "p":
@@ -316,9 +453,21 @@ func (m tuiModel) updateFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m tuiModel) View() string {
+	m.ensureState()
 	header := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#f8fafc")).Render("Moodle TUI")
 	header += "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("#94a3b8")).Render(strings.Join(m.breadcrumb(), " > "))
+	footer := m.renderFooter()
+	leftWidth, rightWidth, matrixHeight, previewHeight := m.layoutSizes(header, footer)
+	preview := m.renderBottomPane(leftWidth+rightWidth+2, previewHeight)
+	if m.topCollapsed {
+		return header + "\n\n" + preview + "\n\n" + footer
+	}
+	left := m.renderTreePane(leftWidth, matrixHeight)
+	right := m.renderRightPane(rightWidth, matrixHeight)
+	return header + "\n\n" + lipgloss.JoinHorizontal(lipgloss.Top, left, "  ", right) + "\n\n" + preview + "\n\n" + footer
+}
 
+func (m tuiModel) layoutSizes(header string, footer string) (int, int, int, int) {
 	leftWidth := max(40, m.width/2-2)
 	rightWidth := max(40, m.width-leftWidth-2)
 	if m.width == 0 {
@@ -331,31 +480,53 @@ func (m tuiModel) View() string {
 	}
 	previewHeight := 10
 	if m.height > 0 {
-		previewHeight = max(6, m.height-matrixHeight-8)
+		if m.topCollapsed {
+			previewHeight = max(10, m.height-countLines(header)-countLines(footer)-5)
+		} else {
+			previewHeight = max(6, m.height-matrixHeight-8)
+		}
 	}
+	return leftWidth, rightWidth, matrixHeight, previewHeight
+}
 
-	left := m.renderTreePane(leftWidth, matrixHeight)
-	right := m.renderRightPane(rightWidth, matrixHeight)
-	preview := m.renderBottomPane(leftWidth+rightWidth+2, previewHeight)
-	footer := m.renderFooter()
-
-	return header + "\n\n" + lipgloss.JoinHorizontal(lipgloss.Top, left, "  ", right) + "\n\n" + preview + "\n\n" + footer
+func (m *tuiModel) ensureState() {
+	if m.previewCache == nil {
+		m.previewCache = map[string]string{}
+	}
+	if m.expanded == nil {
+		m.expanded = map[string]bool{}
+	}
+	if m.nodeByKey == nil {
+		m.nodeByKey = map[string]navNode{}
+	}
+	if m.parentByKey == nil {
+		m.parentByKey = map[string]string{}
+	}
+	if m.childCache == nil {
+		m.childCache = map[string][]navNode{}
+	}
+	if m.childBusy == nil {
+		m.childBusy = map[string]bool{}
+	}
+	if m.childErrors == nil {
+		m.childErrors = map[string]string{}
+	}
+	if m.lastUpperFocus == "" {
+		m.lastUpperFocus = focusTree
+	}
+	if m.previewMode == "" {
+		m.previewMode = previewModeReader
+	}
+	if m.previewViewport.Width == 0 && m.previewViewport.Height == 0 {
+		m.previewViewport = viewport.New(0, 0)
+		m.previewViewport.KeyMap = viewport.KeyMap{}
+	}
 }
 
 func (m *tuiModel) ensureChildren(node navNode) ([]navNode, error) {
-	if children, ok := m.childCache[node.Key]; ok {
-		return children, nil
-	}
-	children, err := m.nav.Children(node)
-	if err != nil {
-		return nil, err
-	}
-	m.childCache[node.Key] = children
-	for _, child := range children {
-		m.nodeByKey[child.Key] = child
-		if _, ok := m.parentByKey[child.Key]; !ok {
-			m.parentByKey[child.Key] = node.Key
-		}
+	children, ok := m.childCache[node.Key]
+	if !ok {
+		return nil, fmt.Errorf("children for %q are not loaded", node.Title)
 	}
 	return children, nil
 }
@@ -397,6 +568,20 @@ func (m tuiModel) currentFilter() string {
 	return m.leftFilter
 }
 
+func (m tuiModel) currentUpperFocus() paneFocus {
+	if m.focus == focusRight {
+		return focusRight
+	}
+	return focusTree
+}
+
+func (m tuiModel) returnUpperFocus() paneFocus {
+	if m.lastUpperFocus == focusRight {
+		return focusRight
+	}
+	return focusTree
+}
+
 func (m *tuiModel) setCurrentFilter(value string) {
 	if m.focus == focusRight {
 		m.rightFilter = value
@@ -408,8 +593,8 @@ func (m *tuiModel) setCurrentFilter(value string) {
 
 func (m tuiModel) treeRows() []treeRow {
 	rows := []treeRow{}
-	children, err := m.ensureChildren(m.root)
-	if err != nil {
+	children, ok := m.childCache[m.root.Key]
+	if !ok {
 		return rows
 	}
 	pathSet := m.selectedPathSet()
@@ -420,19 +605,23 @@ func (m tuiModel) treeRows() []treeRow {
 }
 
 func (m tuiModel) appendTreeRow(rows *[]treeRow, node navNode, depth int, pathSet map[string]bool) {
-	children, _ := m.ensureChildren(node)
-	hasKids := len(children) > 0
+	children, cached := m.childCache[node.Key]
+	hasKids := nodeMayHaveChildren(node)
+	if cached {
+		hasKids = len(children) > 0
+	}
 	row := treeRow{
 		Node:       node,
 		Depth:      depth,
 		HasKids:    hasKids,
 		Expanded:   m.expanded[node.Key],
+		Loading:    m.childBusy[node.Key],
 		TopLevel:   depth == 0,
 		QuickBand:  depth == 0 && (node.Kind == navNodeCurrent || node.Kind == navNodeToday),
 		BrowseBand: depth == 0 && (node.Kind == navNodeSemesters || node.Kind == navNodeTimetable),
 	}
 	*rows = append(*rows, row)
-	if hasKids && m.expanded[node.Key] && pathSet[node.Key] {
+	if cached && hasKids && m.expanded[node.Key] && pathSet[node.Key] {
 		for _, child := range children {
 			m.appendTreeRow(rows, child, depth+1, pathSet)
 		}
@@ -475,8 +664,8 @@ func (m tuiModel) rightEntries() []rightEntry {
 		}
 		return filterRightEntries(entries, m.rightFilter)
 	}
-	children, err := m.ensureChildren(selected)
-	if err != nil {
+	children, ok := m.childCache[selected.Key]
+	if !ok {
 		return nil
 	}
 	entries := make([]rightEntry, 0, len(children))
@@ -558,6 +747,7 @@ func (m *tuiModel) moveSelection(delta int) {
 	}
 	m.selectedKey = rows[index].Node.Key
 	m.rightSelected = 0
+	m.resetPreviewPosition()
 }
 
 func (m *tuiModel) setSelection(index int) {
@@ -587,15 +777,17 @@ func (m *tuiModel) setSelection(index int) {
 	}
 	m.selectedKey = rows[index].Node.Key
 	m.rightSelected = 0
+	m.resetPreviewPosition()
 }
 
 func (m tuiModel) handleLeft() (tea.Model, tea.Cmd) {
 	if m.focus == focusRight {
+		m.lastUpperFocus = focusTree
 		m.focus = focusTree
 		return m, nil
 	}
 	selected := m.selectedNode()
-	children, _ := m.ensureChildren(selected)
+	children := m.childCache[selected.Key]
 	if len(children) > 0 && m.expanded[selected.Key] {
 		delete(m.expanded, selected.Key)
 		return m, nil
@@ -609,14 +801,13 @@ func (m tuiModel) handleLeft() (tea.Model, tea.Cmd) {
 }
 
 func (m tuiModel) handleRight() (tea.Model, tea.Cmd) {
-	if len(m.rightEntries()) == 0 {
-		return m, nil
-	}
+	cmd := m.requestChildrenCmd(m.selectedNode())
+	m.lastUpperFocus = focusRight
 	m.focus = focusRight
 	if m.rightSelected >= len(m.rightEntries()) {
 		m.rightSelected = 0
 	}
-	return m, nil
+	return m, cmd
 }
 
 func (m tuiModel) handleEnter() (tea.Model, tea.Cmd) {
@@ -624,20 +815,23 @@ func (m tuiModel) handleEnter() (tea.Model, tea.Cmd) {
 		return m.commitRightSelection()
 	}
 	selected := m.selectedNode()
-	children, err := m.ensureChildren(selected)
-	if err != nil {
-		m.status = err.Error()
-		return m, nil
-	}
-	if len(children) > 0 {
-		if m.expanded[selected.Key] {
-			delete(m.expanded, selected.Key)
+	if nodeMayHaveChildren(selected) {
+		if children, ok := m.childCache[selected.Key]; ok {
+			if len(children) > 0 {
+				if m.expanded[selected.Key] {
+					delete(m.expanded, selected.Key)
+				} else {
+					m.expanded[selected.Key] = true
+				}
+				return m, nil
+			}
 		} else {
 			m.expanded[selected.Key] = true
+			return m, m.requestChildrenCmd(selected)
 		}
-		return m, nil
 	}
 	if selected.Resource != nil {
+		m.lastUpperFocus = focusRight
 		m.focus = focusRight
 		m.rightSelected = 0
 	}
@@ -655,16 +849,18 @@ func (m tuiModel) commitRightSelection() (tea.Model, tea.Cmd) {
 	node := entry.Node
 	m.selectedKey = node.Key
 	m.rightSelected = 0
+	m.resetPreviewPosition()
 	m.expandVisiblePath(node.Key)
-	children, err := m.ensureChildren(node)
-	if err != nil {
-		m.status = err.Error()
-		return m, nil
-	}
-	if len(children) > 0 {
+	if children, ok := m.childCache[node.Key]; ok {
+		if len(children) > 0 {
+			m.expanded[node.Key] = true
+			m.focus = focusRight
+			return m, nil
+		}
+	} else if nodeMayHaveChildren(node) {
 		m.expanded[node.Key] = true
 		m.focus = focusRight
-		return m, nil
+		return m, m.requestChildrenCmd(node)
 	}
 	if node.Resource != nil {
 		m.focus = focusRight
@@ -708,12 +904,16 @@ func (m tuiModel) runAction(action string, target navNode) (tea.Model, tea.Cmd) 
 		if !target.Openable {
 			return m, nil
 		}
+		logDebug("tui.open", "action: trigger", "key: "+target.Key, "title: "+target.Title)
+		m.status = "Opening..."
 		return m, m.openCmd(target)
 	case "print":
 		if !target.Printable {
 			m.status = "Selected item cannot be previewed."
 			return m, nil
 		}
+		logDebug("tui.print", "action: trigger", "key: "+target.Key, "title: "+target.Title)
+		m.previewBusy = target.Key
 		return m, m.printCmd(target)
 	case "download":
 		if target.Resource == nil {
@@ -725,6 +925,7 @@ func (m tuiModel) runAction(action string, target navNode) (tea.Model, tea.Cmd) 
 			return m, nil
 		}
 		m.dialog = dialog
+		logDebug("tui.download", "action: trigger", "key: "+target.Key, "title: "+target.Title, "cwd: "+dialog.cwd)
 		m.status = "Download dialog"
 		return m, nil
 	default:
@@ -752,8 +953,15 @@ func (m tuiModel) printCmd(node navNode) tea.Cmd {
 			return tuiPreviewMsg{Err: err}
 		}
 		text = strings.TrimSpace(text)
-		if len(text) > 1600 {
-			text = text[:1600] + "\n..."
+		return tuiPreviewMsg{Key: node.Key, Text: text}
+	}
+}
+
+func (m tuiModel) previewCmd(node navNode) tea.Cmd {
+	return func() tea.Msg {
+		text := strings.TrimSpace(m.nav.Preview(node))
+		if text == "" {
+			text = "No preview available."
 		}
 		return tuiPreviewMsg{Key: node.Key, Text: text}
 	}
@@ -761,7 +969,7 @@ func (m tuiModel) printCmd(node navNode) tea.Cmd {
 
 func (m *tuiModel) autoPreviewCmd() tea.Cmd {
 	target, ok := m.previewTargetNode()
-	if !ok || !target.Printable {
+	if !ok || !nodeSupportsAsyncPreview(target) {
 		return nil
 	}
 	if _, ok := m.previewCache[target.Key]; ok {
@@ -771,14 +979,28 @@ func (m *tuiModel) autoPreviewCmd() tea.Cmd {
 		return nil
 	}
 	m.previewBusy = target.Key
-	return m.printCmd(target)
+	if target.Printable {
+		return m.printCmd(target)
+	}
+	return m.previewCmd(target)
+}
+
+func (m *tuiModel) selectionChangedCmd() tea.Cmd {
+	return tea.Batch(m.requestChildrenCmd(m.selectedNode()), m.autoPreviewCmd())
 }
 
 func (m tuiModel) renderTreePane(width int, height int) string {
 	rows := m.visibleTreeRows()
 	title := "Navigation"
 	if len(rows) == 0 {
-		return paneBoxStyle.Width(width).Height(height).Render(paneTitleStyle.Render(title) + "\n\n" + paneMutedStyle.Render("(empty)"))
+		body := paneMutedStyle.Render("(loading)")
+		if errText, ok := m.childErrors[m.root.Key]; ok {
+			body = paneMutedStyle.Render(errText)
+		}
+		if _, ok := m.childCache[m.root.Key]; ok {
+			body = paneMutedStyle.Render("(empty)")
+		}
+		return paneBox(m.focus == focusTree).Width(width).Height(height).Render(paneTitleStyle.Render(title) + "\n\n" + body)
 	}
 	lines := []string{}
 	selectedLine := 0
@@ -793,17 +1015,17 @@ func (m tuiModel) renderTreePane(width int, height int) string {
 		if isSelected {
 			selectedLine = len(lines)
 		}
-		lines = append(lines, renderTreeRow(row, isSelected, width-8, m.leftFilter))
+		lines = append(lines, renderTreeRow(row, isSelected, width-8, m.leftFilter, m.spinnerFrame))
 	}
 	header := paneTitleStyle.Render(title)
 	content := header + "\n\n" + joinBlocksForHeight(lines, selectedLine, paneBodyLines(height, header))
-	return paneBoxStyle.Width(width).Height(height).Render(content)
+	return paneBox(m.focus == focusTree).Width(width).Height(height).Render(content)
 }
 
 func (m tuiModel) renderRightPane(width int, height int) string {
 	selected := m.selectedNode()
 	if selected.Key == "" {
-		return renderPreviewPane("Details", "", width, height)
+		return m.renderPreviewViewport("Details", "", width, height)
 	}
 	entries := m.rightEntries()
 	title := selected.Title
@@ -812,7 +1034,13 @@ func (m tuiModel) renderRightPane(width int, height int) string {
 	}
 	header := paneTitleStyle.Render(truncateRunes(title, max(8, width-8)))
 	if len(entries) == 0 {
-		return paneBoxStyle.Width(width).Height(height).Render(header + "\n\n" + paneMutedStyle.Render("(empty)"))
+		body := "(empty)"
+		if m.childBusy[selected.Key] {
+			body = m.loadingLabel("Loading items")
+		} else if errText, ok := m.childErrors[selected.Key]; ok {
+			body = errText
+		}
+		return paneBox(m.focus == focusRight).Width(width).Height(height).Render(header + "\n\n" + paneMutedStyle.Render(body))
 	}
 	lines := make([]string, 0, len(entries))
 	for index, entry := range entries {
@@ -824,7 +1052,7 @@ func (m tuiModel) renderRightPane(width int, height int) string {
 		selectedIndex = m.rightSelected
 	}
 	content := header + "\n\n" + joinBlocksForHeight(lines, selectedIndex, paneBodyLines(height, header))
-	return paneBoxStyle.Width(width).Height(height).Render(content)
+	return paneBox(m.focus == focusRight).Width(width).Height(height).Render(content)
 }
 
 func (m tuiModel) renderBottomPane(width int, height int) string {
@@ -832,13 +1060,16 @@ func (m tuiModel) renderBottomPane(width int, height int) string {
 		return m.renderDownloadDialog(width, height)
 	}
 	title, body := m.previewSubject()
-	return renderPreviewPane(title, body, width, height)
+	return m.renderPreviewViewport(title, body, width, height)
 }
 
 func (m tuiModel) previewSubject() (string, string) {
 	if m.focus == focusRight {
 		if entry, ok := m.selectedRightEntry(); ok {
 			if entry.Kind == rightEntryAction {
+				if entry.Action == "print" && (m.previewBusy == m.selectedNode().Key || m.previewCache[m.selectedNode().Key] != "") {
+					return m.nodePreview(m.selectedNode())
+				}
 				return entry.Label, entry.Description
 			}
 			return m.nodePreview(entry.Node)
@@ -865,55 +1096,132 @@ func (m tuiModel) nodePreview(node navNode) (string, string) {
 	if title == "" {
 		title = "Details"
 	}
-	switch {
-	case node.Resource != nil:
-		body := m.nav.Preview(node)
+	if node.Resource != nil {
+		return title, m.resourcePreview(node)
+	}
+	return title, m.nodeBodyPreview(node)
+}
+
+func (m tuiModel) nodeBodyPreview(node navNode) string {
+	base := strings.TrimSpace(m.staticNodePreview(node))
+	if node.Kind == navNodeCourse {
 		if text, ok := m.previewCache[node.Key]; ok {
-			if body != "" {
-				body += "\n\n"
+			if m.preferDocumentPreview() {
+				return m.formatPreviewBody(node, text)
 			}
-			body += text
-		} else if m.previewBusy == node.Key {
-			if body != "" {
-				body += "\n\n"
-			}
-			body += "Loading preview..."
+			return m.formatPreviewBody(node, appendPreviewBlock(base, text))
 		}
-		return title, body
-	case node.Kind == navNodeCourse || node.Kind == navNodeSemester || node.Kind == navNodeSection || node.Kind == navNodeCurrent || node.Kind == navNodeToday || node.Kind == navNodeWeek || node.Kind == navNodeTimetable:
-		return title, m.structurePreview(node, 2)
+		if m.previewBusy == node.Key {
+			return m.formatPreviewBody(node, appendPreviewBlock(base, m.loadingLabel("Loading course page")))
+		}
+	}
+	if !nodeMayHaveChildren(node) {
+		return m.formatPreviewBody(node, base)
+	}
+	children, ok := m.childCache[node.Key]
+	if !ok {
+		if errText, hasErr := m.childErrors[node.Key]; hasErr {
+			return m.formatPreviewBody(node, appendPreviewBlock(base, errText))
+		}
+		if m.childBusy[node.Key] {
+			return m.formatPreviewBody(node, appendPreviewBlock(base, m.loadingLabel("Loading")))
+		}
+		return m.formatPreviewBody(node, appendPreviewBlock(base, "Open this item to load its contents."))
+	}
+	if len(children) == 0 {
+		return m.formatPreviewBody(node, appendPreviewBlock(base, "No items."))
+	}
+	switch node.Kind {
+	case navNodeToday, navNodeWeek:
+		return m.formatPreviewBody(node, appendPreviewBlock(base, previewFromChildren(children)))
 	default:
-		return title, m.nav.Preview(node)
+		return m.formatPreviewBody(node, appendPreviewBlock(base, m.outlinePreview(children, 2)))
 	}
 }
 
-func (m tuiModel) structurePreview(node navNode, depth int) string {
-	body := strings.TrimSpace(m.nav.Preview(node))
-	children, err := m.ensureChildren(node)
-	if err != nil || len(children) == 0 || depth <= 0 {
-		return body
-	}
+func (m tuiModel) outlinePreview(children []navNode, depth int) string {
 	lines := []string{}
 	for _, child := range children {
 		lines = append(lines, outlineNode(child, 0))
 		if depth > 1 {
-			grandChildren, err := m.ensureChildren(child)
-			if err == nil {
+			if grandChildren, ok := m.childCache[child.Key]; ok {
 				for _, grandChild := range grandChildren {
 					lines = append(lines, outlineNode(grandChild, 1))
 				}
 			}
 		}
 	}
-	outline := strings.Join(lines, "\n")
-	if body == "" {
-		return outline
+	return strings.Join(lines, "\n")
+}
+
+func (m tuiModel) staticNodePreview(node navNode) string {
+	switch node.Kind {
+	case navNodeHome:
+		return "Current jumps to the active lecture. Today shows today’s timetable. Semesters is full course browsing."
+	case navNodeCurrent:
+		return "Current lecture and matching course items."
+	case navNodeToday:
+		return "Today’s lecture entries."
+	case navNodeTimetable:
+		return "Browse timetable weeks."
+	case navNodeWeek:
+		if node.PreviewText != "" {
+			return node.PreviewText
+		}
+		return node.Subtitle
+	case navNodeSemesters:
+		return "Browse Moodle courses grouped by semester."
+	case navNodeSemester:
+		return fmt.Sprintf("Semester %s", node.Title)
+	case navNodeCourse:
+		return fmt.Sprintf("Course: %s", node.Title)
+	case navNodeEvent:
+		if node.PreviewText != "" {
+			return node.PreviewText
+		}
+		return node.Title
+	case navNodeSections:
+		return "Sections in Moodle order."
+	case navNodeSection:
+		return fmt.Sprintf("Section: %s", node.Title)
+	case navNodeItems:
+		if node.UseCurrentSort {
+			return "Items ordered for the current lecture: newest relevant file first."
+		}
+		return "Items in Moodle order."
+	default:
+		return ""
 	}
-	return body + "\n\n" + outline
+}
+
+func (m tuiModel) resourcePreview(node navNode) string {
+	body := resourcePreviewText(node)
+	if text, ok := m.previewCache[node.Key]; ok {
+		if m.preferDocumentPreview() {
+			return m.formatPreviewBody(node, text)
+		}
+		return m.formatPreviewBody(node, appendPreviewBlock(body, text))
+	}
+	if m.previewBusy == node.Key {
+		return m.formatPreviewBody(node, appendPreviewBlock(body, m.loadingLabel("Loading preview")))
+	}
+	return m.formatPreviewBody(node, body)
+}
+
+func nodeSupportsAsyncPreview(node navNode) bool {
+	return node.Printable || node.Kind == navNodeCourse
+}
+
+func (m tuiModel) preferDocumentPreview() bool {
+	return m.topCollapsed || m.focus == focusPreview
 }
 
 func (m tuiModel) renderFooter() string {
-	parts := []string{"h/j/k/l or arrows", "Enter=toggle/drill", "/=filter", "o=open", "p=preview", "d=download", "q=quit"}
+	parts := []string{"h/j/k/l or arrows", "Ctrl+h/j/k/l=panes", "Ctrl+w=reader", "m=markdown", "Enter=toggle/drill", "/=filter", "o=open", "p=preview", "d=download", "q=quit"}
+	if m.focus == focusPreview {
+		parts = append(parts, fmt.Sprintf("preview %d/%d", m.previewViewport.YOffset+1, m.maxPreviewScroll()+1))
+	}
+	parts = append(parts, "mode:"+string(m.previewMode))
 	if m.filterMode {
 		parts = append(parts, "/"+m.filterInput)
 	} else if m.dialog != nil {
@@ -921,10 +1229,48 @@ func (m tuiModel) renderFooter() string {
 	} else if m.status != "" {
 		parts = append(parts, m.status)
 	}
+	parts = append(parts, tuiVersionLabel())
 	return lipgloss.NewStyle().Foreground(lipgloss.Color("#94a3b8")).Render(strings.Join(parts, " · "))
 }
 
-func renderTreeRow(row treeRow, selected bool, width int, filter string) string {
+func (m *tuiModel) togglePreviewMode() {
+	switch m.previewMode {
+	case previewModeMarkdown:
+		m.previewMode = previewModeReader
+		m.status = "Reader mode"
+	default:
+		m.previewMode = previewModeMarkdown
+		m.status = "Markdown mode"
+	}
+	m.resetPreviewPosition()
+}
+
+func tuiVersionLabel() string {
+	version := strings.TrimSpace(ver.Version())
+	if version == "" {
+		version = ver.DefaultVersion
+	}
+	buildDate := strings.TrimSpace(ver.EffectiveBuildDate())
+	if buildDate == "" {
+		buildDate = ver.DefaultBuildDate
+	}
+	if ver.IsDev() {
+		if buildDate != ver.DefaultBuildDate {
+			return "dev build " + buildDate
+		}
+		return "dev build"
+	}
+	parsed, err := ver.ParseSemver(version)
+	if err == nil && parsed.Prerelease != "" {
+		if buildDate != ver.DefaultBuildDate {
+			return version + " preview built " + buildDate
+		}
+		return version + " preview"
+	}
+	return version
+}
+
+func renderTreeRow(row treeRow, selected bool, width int, filter string, spinnerFrame int) string {
 	title := row.Node.Title
 	if title == "" {
 		title = "(untitled)"
@@ -942,6 +1288,9 @@ func renderTreeRow(row treeRow, selected bool, width int, filter string) string 
 	display := truncateRunes(prefix+title, max(1, width-2))
 	if filter != "" {
 		display = highlightMatch(display, filter)
+	}
+	if row.Loading {
+		display = truncateRunes(display+" "+spinnerFrames[spinnerFrame%len(spinnerFrames)], max(1, width-2))
 	}
 	if selected {
 		return selectedRowStyle.Render("› " + display)
@@ -980,16 +1329,132 @@ func outlineNode(node navNode, depth int) string {
 	return prefix + strings.TrimSpace(text)
 }
 
-func renderPreviewPane(title string, text string, width int, height int) string {
+func paneBox(focused bool) lipgloss.Style {
+	if focused {
+		return paneBoxStyle.Copy().BorderForeground(lipgloss.Color("#7dd3fc"))
+	}
+	return paneBoxStyle
+}
+
+func (m *tuiModel) renderPreviewViewport(title string, text string, width int, height int) string {
+	box := paneBox(m.focus == focusPreview || m.topCollapsed)
 	header := paneTitleStyle.Render(truncateRunes(title, max(8, width-8)))
 	availableLines := paneBodyLines(height, header)
-	body := paneBodyStyle.Render(clampTextLines(text, availableLines))
-	style := paneBoxStyle.Width(width)
+	contentWidth := max(1, width-box.GetHorizontalFrameSize())
+	m.previewViewport.Width = contentWidth
+	m.previewViewport.Height = availableLines
+	m.previewViewport.SetContent(strings.TrimSpace(text))
+	if m.previewViewport.YOffset > m.maxPreviewScroll() {
+		m.previewViewport.GotoBottom()
+	}
+	body := paneBodyStyle.Render(m.previewViewport.View())
+	style := box.Width(width)
 	if height > 0 {
 		style = style.Height(height)
 	}
 	return style.Render(header + "\n\n" + body)
 }
+
+func (m *tuiModel) syncPreviewViewportState() {
+	title, body := m.previewSubject()
+	leftWidth, rightWidth, _, previewHeight := m.layoutSizes("header", "footer")
+	width := leftWidth + rightWidth + 2
+	if width <= 0 {
+		width = 80
+	}
+	box := paneBox(m.focus == focusPreview || m.topCollapsed)
+	header := paneTitleStyle.Render(truncateRunes(title, max(8, width-8)))
+	contentWidth := max(1, width-box.GetHorizontalFrameSize())
+	contentHeight := paneBodyLines(previewHeight, header)
+	yOffset := m.previewViewport.YOffset
+	m.previewViewport.Width = contentWidth
+	m.previewViewport.Height = contentHeight
+	m.previewViewport.SetContent(strings.TrimSpace(body))
+	maxOffset := max(0, m.previewViewport.TotalLineCount()-m.previewViewport.VisibleLineCount())
+	if yOffset > maxOffset {
+		yOffset = maxOffset
+	}
+	if yOffset < 0 {
+		yOffset = 0
+	}
+	m.previewViewport.SetYOffset(yOffset)
+}
+
+func (m tuiModel) maxPreviewScroll() int {
+	return max(0, m.previewViewport.TotalLineCount()-m.previewViewport.VisibleLineCount())
+}
+
+func (m *tuiModel) resetPreviewPosition() {
+	m.previewViewport.SetYOffset(0)
+}
+
+func (m tuiModel) requestChildrenCmd(node navNode) tea.Cmd {
+	if !nodeMayHaveChildren(node) {
+		return nil
+	}
+	if _, ok := m.childCache[node.Key]; ok {
+		return nil
+	}
+	if m.childBusy[node.Key] {
+		return nil
+	}
+	m.childBusy[node.Key] = true
+	delete(m.childErrors, node.Key)
+	return func() tea.Msg {
+		children, err := m.nav.Children(node)
+		return tuiChildrenMsg{Parent: node, Children: children, Err: err}
+	}
+}
+
+func (m tuiModel) loadingLabel(label string) string {
+	return spinnerFrames[m.spinnerFrame] + " " + label + "..."
+}
+
+func resourcePreviewText(node navNode) string {
+	lines := []string{fmt.Sprintf("Item: %s", node.Title)}
+	if node.Subtitle != "" {
+		lines = append(lines, node.Subtitle)
+	}
+	if node.Resource != nil {
+		if node.Resource.FileType != "" {
+			lines = append(lines, fmt.Sprintf("Type: %s", node.Resource.FileType))
+		}
+		if node.Resource.UploadedAt != "" {
+			lines = append(lines, fmt.Sprintf("Uploaded: %s", node.Resource.UploadedAt))
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func appendPreviewBlock(base string, extra string) string {
+	base = strings.TrimSpace(base)
+	extra = strings.TrimSpace(extra)
+	switch {
+	case base == "":
+		return extra
+	case extra == "":
+		return base
+	default:
+		return base + "\n\n" + extra
+	}
+}
+
+func nodeMayHaveChildren(node navNode) bool {
+	switch node.Kind {
+	case navNodeHome, navNodeCurrent, navNodeToday, navNodeTimetable, navNodeWeek, navNodeSemesters, navNodeSemester, navNodeCourse, navNodeEvent, navNodeSections, navNodeSection, navNodeItems:
+		return true
+	default:
+		return false
+	}
+}
+
+func spinnerTickCmd() tea.Cmd {
+	return tea.Tick(120*time.Millisecond, func(time.Time) tea.Msg {
+		return tuiSpinnerMsg{}
+	})
+}
+
+var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
 func joinBlocksForHeight(blocks []string, selected int, maxLines int) string {
 	if len(blocks) == 0 || maxLines <= 0 {

@@ -31,3 +31,12 @@ func TestCompareStableBeatsPrerelease(t *testing.T) {
 		t.Fatalf("expected stable to be newer, got %d", result)
 	}
 }
+
+func TestEffectiveBuildDatePrefersInjectedBuildDate(t *testing.T) {
+	restore := SetBuildInfoForTesting("v1.2.3", "test", "2026-04-07T22:10:00Z")
+	defer restore()
+
+	if got := EffectiveBuildDate(); got != "2026-04-07T22:10:00Z" {
+		t.Fatalf("expected injected build date, got %q", got)
+	}
+}

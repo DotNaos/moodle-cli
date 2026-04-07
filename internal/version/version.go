@@ -2,6 +2,7 @@ package version
 
 import (
 	"fmt"
+	"runtime/debug"
 	"strconv"
 	"strings"
 )
@@ -44,6 +45,23 @@ func BuildDate() string {
 		return DefaultBuildDate
 	}
 	return buildDate
+}
+
+func EffectiveBuildDate() string {
+	if value := strings.TrimSpace(BuildDate()); value != "" && !strings.EqualFold(value, DefaultBuildDate) {
+		return value
+	}
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, setting := range info.Settings {
+			if setting.Key == "vcs.time" {
+				value := strings.TrimSpace(setting.Value)
+				if value != "" {
+					return value
+				}
+			}
+		}
+	}
+	return DefaultBuildDate
 }
 
 func IsDev() bool {
@@ -119,5 +137,19 @@ func compareInt(a int, b int) int {
 		return 1
 	default:
 		return 0
+	}
+}
+
+func SetBuildInfoForTesting(nextVersion string, nextCommit string, nextBuildDate string) func() {
+	previousVersion := version
+	previousCommit := commit
+	previousBuildDate := buildDate
+	version = nextVersion
+	commit = nextCommit
+	buildDate = nextBuildDate
+	return func() {
+		version = previousVersion
+		commit = previousCommit
+		buildDate = previousBuildDate
 	}
 }

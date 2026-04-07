@@ -73,18 +73,19 @@ type navChildSummary struct {
 }
 
 type navService struct {
-	client          *moodle.Client
-	options         selectorOptions
-	now             time.Time
-	calendarURL     string
-	calendarLoaded  bool
-	courses         []moodle.Course
-	coursesLoaded   bool
-	current         currentLectureResult
-	currentLoaded   bool
-	todayEvents     []moodle.CalendarEvent
-	todayLoaded     bool
-	courseResources map[string][]moodle.Resource
+	client            *moodle.Client
+	options           selectorOptions
+	now               time.Time
+	calendarURL       string
+	calendarLoaded    bool
+	courses           []moodle.Course
+	coursesLoaded     bool
+	current           currentLectureResult
+	currentLoaded     bool
+	todayEvents       []moodle.CalendarEvent
+	todayLoaded       bool
+	courseResources   map[string][]moodle.Resource
+	coursePagePreview map[string]string
 }
 
 func newNavService(client *moodle.Client, options selectorOptions) (*navService, error) {
@@ -93,10 +94,11 @@ func newNavService(client *moodle.Client, options selectorOptions) (*navService,
 		return nil, err
 	}
 	return &navService{
-		client:          client,
-		options:         options,
-		now:             now,
-		courseResources: map[string][]moodle.Resource{},
+		client:            client,
+		options:           options,
+		now:               now,
+		courseResources:   map[string][]moodle.Resource{},
+		coursePagePreview: map[string]string{},
 	}, nil
 }
 
@@ -249,7 +251,7 @@ func (s *navService) Preview(node navNode) string {
 			lines = append(lines, fmt.Sprintf("Room: %s", result.Event.Location))
 		}
 		if result.Course != nil {
-			lines = append(lines, fmt.Sprintf("Course: %s", result.Course.Title))
+			lines = append(lines, fmt.Sprintf("Course: %s", moodle.DisplayCourseName(result.Course.Title, nil)))
 		}
 		if result.Material != nil {
 			lines = append(lines, fmt.Sprintf("Current material: %s", result.Material.Label))
@@ -279,12 +281,7 @@ func (s *navService) Preview(node navNode) string {
 	case navNodeCoursesCollection:
 		return fmt.Sprintf("Courses in %s", node.Semester)
 	case navNodeCourse:
-		lines := []string{}
-		if node.Course != nil {
-			lines = append(lines, fmt.Sprintf("Course: %s", node.Course.Fullname))
-		}
-		lines = append(lines, "Browse sections in Moodle order.")
-		return strings.Join(lines, "\n")
+		return s.coursePreview(node)
 	case navNodeEvent:
 		if node.PreviewText != "" {
 			return node.PreviewText
@@ -299,7 +296,7 @@ func (s *navService) Preview(node navNode) string {
 			}
 		}
 		if node.Course != nil {
-			lines = append(lines, fmt.Sprintf("Matched course: %s", node.Course.Fullname))
+			lines = append(lines, fmt.Sprintf("Matched course: %s", s.displayCourseName(*node.Course)))
 		} else {
 			lines = append(lines, "No Moodle course match.")
 		}
@@ -620,12 +617,12 @@ func (s *navService) courseListChildren(semester string) ([]navNode, error) {
 			continue
 		}
 		copy := course
+		title := s.displayCourseName(course)
 		out = append(out, navNode{
 			Key:      fmt.Sprintf("course:%d", course.ID),
 			Kind:     navNodeCourse,
-			Segment:  slugNavSegment(course.Fullname),
-			Title:    course.Fullname,
-			Subtitle: course.Shortname,
+			Segment:  slugNavSegment(title),
+			Title:    title,
 			CourseID: fmt.Sprintf("%d", course.ID),
 			Course:   &copy,
 			Openable: true,

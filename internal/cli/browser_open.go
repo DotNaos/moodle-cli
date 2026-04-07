@@ -8,12 +8,42 @@ import (
 	"strings"
 )
 
+var browserOpenRunner = func(cmd *exec.Cmd) ([]byte, error) {
+	return cmd.CombinedOutput()
+}
+
 func openURL(url string) error {
-	cmd, err := browserOpenCommand(runtime.GOOS, normalizeBrowserURL(url))
+	normalized := normalizeBrowserURL(url)
+	cmd, err := browserOpenCommand(runtime.GOOS, normalized)
 	if err != nil {
 		return err
 	}
-	return cmd.Run()
+	output, err := browserOpenRunner(cmd)
+	if err == nil {
+		logDebug("open", "target: "+normalized, "command: "+strings.Join(cmd.Args, " "), "result: success")
+		return nil
+	}
+	stderr := strings.TrimSpace(string(output))
+	logDebug(
+		"open",
+		"os: "+runtime.GOOS,
+		"target: "+normalized,
+		"command: "+strings.Join(cmd.Args, " "),
+		"error: "+err.Error(),
+		"output: "+stderr,
+	)
+	logPath := logUnexpected(
+		"open",
+		err,
+		"os: "+runtime.GOOS,
+		"target: "+normalized,
+		"command: "+strings.Join(cmd.Args, " "),
+		"output: "+stderr,
+	)
+	if stderr != "" {
+		return fmt.Errorf("open failed for %q: %s (details: %s)", normalized, stderr, logPath)
+	}
+	return fmt.Errorf("open failed for %q: %w (details: %s)", normalized, err, logPath)
 }
 
 func browserOpenCommand(goos string, url string) (*exec.Cmd, error) {

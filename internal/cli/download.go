@@ -2,8 +2,12 @@ package cli
 
 import (
 	"fmt"
+	"mime"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/DotNaos/moodle-cli/internal/moodle"
@@ -146,15 +150,91 @@ func resolveDefaultOutputDir(outputPath string) string {
 }
 
 func buildResourceFilename(res moodle.Resource) string {
+	return buildDownloadedResourceFilename(res, "")
+}
+
+func buildDownloadedResourceFilename(res moodle.Resource, contentType string) string {
 	name := strings.TrimSpace(res.Name)
 	if name == "" {
 		name = "resource-" + res.ID
 	}
 	name = sanitizeFilename(name)
-	if filepath.Ext(name) == "" && res.FileType != "" {
-		name += "." + res.FileType
+	if !hasUsableFilenameExtension(name) {
+		if ext := resourceFilenameExtension(res, contentType); ext != "" {
+			name += ext
+		}
 	}
 	return name
+}
+
+var usableFilenameExtensionPattern = regexp.MustCompile(`^\.[a-z0-9]{1,8}$`)
+
+func hasUsableFilenameExtension(name string) bool {
+	ext := strings.TrimSpace(strings.ToLower(filepath.Ext(name)))
+	if ext == "" || ext == "." {
+		return false
+	}
+	return usableFilenameExtensionPattern.MatchString(ext)
+}
+
+func resourceFilenameExtension(res moodle.Resource, contentType string) string {
+	if ext := normalizeFilenameExtension(res.FileType); ext != "" {
+		return ext
+	}
+	if ext := extensionFromContentType(contentType); ext != "" {
+		return ext
+	}
+	if ext := extensionFromResourceURL(res.URL); ext != "" {
+		return ext
+	}
+	return ""
+}
+
+func normalizeFilenameExtension(value string) string {
+	value = strings.TrimSpace(strings.ToLower(value))
+	value = strings.TrimPrefix(value, ".")
+	if value == "" {
+		return ""
+	}
+	return "." + value
+}
+
+func extensionFromResourceURL(raw string) string {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return ""
+	}
+	ext := strings.TrimSpace(strings.ToLower(path.Ext(parsed.Path)))
+	if ext == "" || ext == "." {
+		return ""
+	}
+	switch ext {
+	case ".php", ".asp", ".aspx", ".jsp", ".cgi":
+		return ""
+	}
+	return ext
+}
+
+func extensionFromContentType(contentType string) string {
+	mediaType, _, err := mime.ParseMediaType(strings.TrimSpace(contentType))
+	if err != nil {
+		return ""
+	}
+	switch strings.ToLower(mediaType) {
+	case "application/pdf":
+		return ".pdf"
+	case "text/plain":
+		return ".txt"
+	case "text/html":
+		return ".html"
+	case "application/json":
+		return ".json"
+	}
+	exts, err := mime.ExtensionsByType(mediaType)
+	if err != nil || len(exts) == 0 {
+		return ""
+	}
+	return exts[0]
 }
 
 func ensureDir(path string) error {
