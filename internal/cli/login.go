@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/DotNaos/moodle-cli/internal/moodle"
@@ -50,6 +51,9 @@ var loginCmd = &cobra.Command{
 		}
 
 		fmt.Printf("session saved to %s\n", opts.SessionPath)
+		if isDockerContainer() && (opts.SessionPath == "/data/session.json" || strings.HasPrefix(opts.SessionPath, "/data/")) {
+			fmt.Println("Mount /data to a host folder or named volume if you want separate 'docker run' commands to reuse this session.")
+		}
 		return nil
 	},
 }

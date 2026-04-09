@@ -1,24 +1,15 @@
 # moodle-cli
 
-![moodle-cli icon](assets/moodle_cli_icon.png)
+<img src="assets/moodle_cli_icon.png" alt="moodle-cli icon" width="160" />
 
-CLI for FHGR Moodle with caching, course exports, and file downloads.
+CLI and JSON API for FHGR Moodle.
+Use it to log in, list courses and files, or run a local API server.
 
-## Quickstart
+## Quick setup
 
-### Schnell installieren ohne Go
-Direkt aus den Releases:
-- macOS: drag-and-drop `.dmg` with `moodle-cli.app`
-- Windows: `.exe` installer
-- Linux: `.tar.gz`
+### Use as CLI
 
-Release channels:
-- `stable`: created from `main`
-- `unstable`: prereleases updated from pull requests for testing before merge, named like the current stable version plus a `canary.<branch>.<attempt>` suffix
-
-macOS note:
-- the `.app` release is signed and notarized when the Apple release secrets are configured in GitHub Actions; without those secrets, macOS will warn before opening it
-- after dragging `moodle-cli.app` into `Applications`, open it once to link the `moodle` command into `~/.local/bin`
+1. Install `moodle`.
 
 macOS / Linux:
 ```sh
@@ -30,99 +21,167 @@ Windows PowerShell:
 irm https://raw.githubusercontent.com/DotNaos/moodle-cli/main/scripts/install.ps1 | iex
 ```
 
-Optional kannst du eine feste Version erzwingen:
-```sh
-VERSION=v1.2.3 curl -fsSL https://raw.githubusercontent.com/DotNaos/moodle-cli/main/scripts/install.sh | bash
-```
+2. Save your login once.
 
-### Mit Go installieren
-1. Install Go: https://go.dev/doc/install
-2. Clone the repo:
-```sh
-git clone https://github.com/DotNaos/moodle-cli.git
-cd moodle-cli
-```
-3. Ensure your Go bin is on PATH:
-```sh
-export PATH="$PATH:$HOME/go/bin"
-```
-4. Build/install the CLI:
-```sh
-go install ./cmd/moodle
-```
-5. Install the skill:
-```sh
-npx skills add DotNaos/moodle-cli
-```
-
-### Erste Einrichtung
-1. Configure credentials:
 ```sh
 moodle config set \
-  --school <school-id> \
-  --username <username> \
-  --password <password> \
-  --calendar-url <ics-url>
+  --school fhgr \
+  --username "<username>" \
+  --password "<password>"
 ```
-Note: `--calendar-url` is optional (only needed for timetable).
-2. Login (re-run when session expires):
+
+3. Log in.
+
 ```sh
 moodle login
 ```
-On first login, the CLI automatically installs the required Playwright driver and Chromium runtime.
-3. Check the installed version:
-```sh
-moodle version
-```
-4. List courses:
+
+You should see `session saved to ...`.
+
+4. Check that it works.
+
 ```sh
 moodle list courses --json
 ```
-5. List files in a course:
+
+### Use as API
+
+If you already logged in, start the API like this:
+
+```sh
+moodle serve --addr :8080
+```
+
+Check it:
+
+```sh
+curl http://127.0.0.1:8080/healthz
+curl http://127.0.0.1:8080/api/courses
+```
+
+`/healthz` should return `{"status":"ok"}`.
+
+If you want a fresh, throwaway login when the server starts, run:
+
+```sh
+moodle serve --addr :8080 \
+  --school fhgr \
+  --username "<username>" \
+  --password "<password>"
+```
+
+### Use as API with Docker
+
+Use this when you want the session to survive across separate `docker run` calls:
+
+1. Log in and save the session into your host folder.
+
+```sh
+docker run --rm \
+  -v ${HOME}/.moodle-cli:/data \
+  -e MOODLE_CLI_HOME=/data \
+  ghcr.io/dotnaos/moodle-cli:latest login \
+  --username "$MOODLE_USERNAME" \
+  --password "$MOODLE_PASSWORD"
+```
+
+2. Start the API with the same mounted folder.
+
+```sh
+docker run --rm -p 8080:8080 \
+  -v ${HOME}/.moodle-cli:/data \
+  -e MOODLE_CLI_HOME=/data \
+  ghcr.io/dotnaos/moodle-cli:latest serve --addr :8080
+```
+
+Use this when you want a fresh login every time and do not want to keep the session:
+
+```sh
+docker run --rm -p 8080:8080 \
+  ghcr.io/dotnaos/moodle-cli:latest serve --addr :8080 \
+  --school fhgr \
+  --username "$MOODLE_USERNAME" \
+  --password "$MOODLE_PASSWORD"
+```
+
+You can also start it with environment variables instead of flags:
+
+```sh
+docker run --rm -p 8080:8080 \
+  -e MOODLE_SCHOOL=fhgr \
+  -e MOODLE_USERNAME="$MOODLE_USERNAME" \
+  -e MOODLE_PASSWORD="$MOODLE_PASSWORD" \
+  ghcr.io/dotnaos/moodle-cli:latest serve --addr :8080
+```
+
+Important: separate `docker run` commands do not share `/data` unless you mount the same host folder or named volume into both runs.
+
+### Use Docker Compose
+
+Set these variables first:
+
+```sh
+export MOODLE_SCHOOL=fhgr
+export MOODLE_USERNAME="<username>"
+export MOODLE_PASSWORD="<password>"
+```
+
+Then start the API:
+
+```sh
+docker compose up
+```
+
+## Common commands
+
+List courses:
+
+```sh
+moodle list courses --json
+```
+
+List files in a course:
+
 ```sh
 moodle list files <course-id|name|current|0> --json
 ```
-6. Open a course or resource in your browser:
+
+Open a course or resource in your browser:
+
 ```sh
 moodle open course <course-id|name|current|0>
 moodle open current current
 moodle open resource <course-id|name|current|0> <resource-id|name|current|0>
 ```
-Note: `moodle` is available on PATH in this workspace; avoid sourcing `~/.zshrc` from non-interactive shell commands because it loads interactive prompt setup.
 
-### REST API mode
-Start the long-running API server:
+Print a course page:
+
 ```sh
-moodle serve --addr :8080
+moodle print course-page <course-id|name|current|0>
 ```
 
-Endpoints (JSON):
-- `GET /healthz` – validates the saved Moodle session
-- `GET /api/courses` – lists enrolled courses
-- `GET /api/courses/{courseID}/resources` – lists files/resources for a course
+Download one file:
 
-The server uses the same config and session files as the CLI (see paths below).
-
-### Updates
-- `moodle update --check` checks whether a newer stable release is available.
-- `moodle update` downloads and installs the latest stable release automatically.
-- The CLI also checks roughly once per day in interactive terminals and prints a short hint if a newer release exists.
-
-### Zsh completion
-In your `.zshrc`:
 ```sh
-autoload -Uz compinit && compinit
-source <(moodle completion zsh)
+moodle download file <course-id|name|current|0> <resource-id|name|current|0> --output-dir <path>
 ```
 
-## Goals
-- Login via Playwright with username/password
-- List courses, files, timetable events
-- Cache Moodle tree in SQLite
-- Cache downloads and avoid re‑downloading
-- Export full course (zip or file tree)
+Export a full course:
 
-## Data locations (defaults)
+```sh
+moodle export course <course-id|name|current|0> --output-dir <path>
+```
+
+## API reference
+
+Endpoints:
+
+- `GET /healthz` checks whether the saved or freshly created session is valid
+- `GET /api/courses` lists enrolled courses
+- `GET /api/courses/{courseID}/resources` lists files and resources for a course
+
+## Default paths
+
 - Config: `~/.moodle-cli/config.json`
 - Session cookies: `~/.moodle-cli/session.json`
 - SQLite cache: `~/.moodle-cli/cache.db`
@@ -130,59 +189,78 @@ source <(moodle completion zsh)
 - CLI state: `~/.moodle-cli/state.json`
 - Output: `~/Downloads/moodle/`
 
-## Container usage
-Build the image locally:
+## Install options
+
+### Install without Go
+
+Directly from releases:
+
+- macOS: drag-and-drop `.dmg` with `moodle-cli.app`
+- Windows: `.exe` installer
+- Linux: `.tar.gz`
+
+On macOS, open `moodle-cli.app` once after moving it into `Applications`. That links the `moodle` command into `~/.local/bin`.
+
+Pin a specific version:
+
+```sh
+VERSION=v1.2.3 curl -fsSL https://raw.githubusercontent.com/DotNaos/moodle-cli/main/scripts/install.sh | bash
+```
+
+### Build from source
+
+```sh
+git clone https://github.com/DotNaos/moodle-cli.git
+cd moodle-cli
+go install ./cmd/moodle
+```
+
+If your Go bin is not on `PATH`, add it first:
+
+```sh
+export PATH="$PATH:$HOME/go/bin"
+```
+
+## Updates
+
+Check for a newer stable release:
+
+```sh
+moodle update --check
+```
+
+Install the latest stable release:
+
+```sh
+moodle update
+```
+
+## Zsh completion
+
+Add this to your `.zshrc`:
+
+```sh
+autoload -Uz compinit && compinit
+source <(moodle completion zsh)
+```
+
+## Release channels
+
+- `stable` is created from `main`
+- `unstable` is created from pull requests for testing before merge
+
+## Development
+
+Build the container locally:
+
 ```sh
 docker build -t ghcr.io/dotnaos/moodle-cli .
 ```
 
-Run a one-off CLI command without installing Go:
-```sh
-docker run --rm \
-  -v ${HOME}/.moodle-cli:/data \
-  -e MOODLE_CLI_HOME=/data \
-  ghcr.io/dotnaos/moodle-cli list courses --json
-```
+The repository also includes the skill at `skills/moodle-cli`.
 
-Run the API server with Docker:
-```sh
-docker run --rm -p 8080:8080 \
-  -v ${HOME}/.moodle-cli:/data \
-  -e MOODLE_CLI_HOME=/data \
-  ghcr.io/dotnaos/moodle-cli serve --addr :8080
-```
+## Notes
 
-Run the API server with Docker Compose:
-```sh
-docker compose up
-```
-
-## Commands
-- `moodle version`
-- `moodle update --check`
-- `moodle update`
-- `moodle login`
-- `moodle list courses --json`
-- `moodle list files <course-id|name|current|0> --json`
-- `moodle list timetable --json`
-- `moodle list current current --json`
-- `moodle open course <course-id|name|current|0>`
-- `moodle open current current`
-- `moodle open resource <course-id|name|current|0> <resource-id|name|current|0>`
-- `moodle download file <course-id|name|current|0> <resource-id|name|current|0> --output-dir <path>`
-- `moodle download file <course-id|name|current|0> --all --output-dir <path>`
-- `moodle export course <course-id|name|current|0> --output-dir <path>`
-- `moodle print current current`
-- `moodle print course-page <course-id|name|current|0>`
-- `moodle print course <course-id|name|current|0> <resource-id|name|current|0>`
-
-By default, scraped course and resource names are cleaned up for easier matching and output. Use `--unsanitized` to preserve the raw Moodle names.
-
-For best PDF OCR in `moodle print`, install `tesseract` and `pdftoppm` (Poppler).
-
-## Skill (moodle-cli)
-- Path: `skills/moodle-cli`
-- Install via skills.sh: point it at `./skills/moodle-cli`
-
-## Status
-Scaffold in progress.
+- `moodle login` installs the required Playwright driver and Chromium runtime on first use
+- By default, scraped course and resource names are cleaned up for easier matching and output. Use `--unsanitized` to keep the raw Moodle names
+- For best PDF OCR in `moodle print`, install `tesseract` and `pdftoppm` (Poppler)

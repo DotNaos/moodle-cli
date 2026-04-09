@@ -16,6 +16,9 @@ import (
 
 var serveAddr string
 var serveShutdownTimeout time.Duration
+var serveSchool string
+var serveUsername string
+var servePassword string
 
 var serveCmd = &cobra.Command{
 	Use:   "serve",
@@ -25,13 +28,14 @@ var serveCmd = &cobra.Command{
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Ensure that credentials are set before starting the server
-		school, username, password, err := resolveLoginInputs("", "", "")
-		if err != nil {
-			return fmt.Errorf("failed to load configuration: %w", err)
+		runtimeLoginOverrides = loginInputOverrides{
+			School:   serveSchool,
+			Username: serveUsername,
+			Password: servePassword,
 		}
-		if username == "" || password == "" || school == "" {
-			return fmt.Errorf("Moodle credentials (school, username, password) are required but not configured. Set MOODLE_USERNAME / MOODLE_PASSWORD or configure them via the CLI")
+
+		if err := ensureServeSession(); err != nil {
+			return err
 		}
 
 		router, err := api.NewRouter(api.ServerOptions{
@@ -86,4 +90,9 @@ func init() {
 
 	serveCmd.Flags().StringVar(&serveAddr, "addr", defaultAddr, "Address to bind the API server to (e.g. :8080 or 127.0.0.1:8080)")
 	serveCmd.Flags().DurationVar(&serveShutdownTimeout, "shutdown-timeout", 10*time.Second, "Grace period for graceful shutdown")
+	serveCmd.Flags().StringVar(&serveSchool, "school", "", "School id used for a fresh login before starting the server")
+	serveCmd.Flags().StringVar(&serveUsername, "username", "", "Username/email used for a fresh login before starting the server")
+	serveCmd.Flags().StringVar(&servePassword, "password", "", "Password used for a fresh login before starting the server")
+
+	serveCmd.RegisterFlagCompletionFunc("school", completeSchoolIDs)
 }

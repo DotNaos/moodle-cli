@@ -10,32 +10,57 @@ import (
 	"github.com/DotNaos/moodle-cli/internal/moodle"
 )
 
+type sessionValidatingClient interface {
+	ValidateSession() error
+}
+
+var loginWithPlaywright = moodle.LoginWithPlaywright
+var runtimeLoginOverrides loginInputOverrides
+
+type loginInputOverrides struct {
+	School   string
+	Username string
+	Password string
+}
+
 func ensureAuthenticatedClient() (*moodle.Client, error) {
-	session, client, err := loadSessionClient()
+	_, client, err := ensureValidatedSession(
+		func() (moodle.Session, sessionValidatingClient, error) {
+			session, client, err := loadSessionClient()
+			if err != nil {
+				return moodle.Session{}, nil, err
+			}
+			return session, client, nil
+		},
+		bootstrapSession,
+		autoRelogin,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := client.ValidateSession(); err != nil {
-		if !errors.Is(err, moodle.ErrSessionExpired) {
-			return nil, err
-		}
-		if err := autoRelogin(session.SchoolID); err != nil {
-			return nil, err
-		}
-		_, client, err = loadSessionClient()
-		if err != nil {
-			return nil, err
-		}
-		if err := client.ValidateSession(); err != nil {
-			if errors.Is(err, moodle.ErrSessionExpired) {
-				return nil, fmt.Errorf("session expired, please run 'moodle login' again")
-			}
-			return nil, err
-		}
+	moodleClient, ok := client.(*moodle.Client)
+	if !ok {
+		return nil, fmt.Errorf("internal error: unexpected client type %T", client)
 	}
 
-	return client, nil
+	return moodleClient, nil
+}
+
+func ensureServeSession() error {
+	if runtimeLoginOverrides.any() {
+		school, username, password, err := resolveLoginInputs("", "", "")
+		if err != nil {
+			return err
+		}
+		if school == "" || username == "" || password == "" {
+			return fmt.Errorf("serve login requires school, username, and password. Provide them via flags, environment variables, or saved config")
+		}
+		return loginAndSaveSession(school, username, password)
+	}
+
+	_, err := ensureAuthenticatedClient()
+	return err
 }
 
 func loadSessionClient() (moodle.Session, *moodle.Client, error) {
@@ -50,6 +75,51 @@ func loadSessionClient() (moodle.Session, *moodle.Client, error) {
 	return session, client, nil
 }
 
+func ensureValidatedSession(load func() (moodle.Session, sessionValidatingClient, error), bootstrap func() error, relogin func(string) error) (moodle.Session, sessionValidatingClient, error) {
+	session, client, err := load()
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return moodle.Session{}, nil, err
+		}
+		if err := bootstrap(); err != nil {
+			return moodle.Session{}, nil, err
+		}
+		return load()
+	}
+
+	if err := client.ValidateSession(); err != nil {
+		if !errors.Is(err, moodle.ErrSessionExpired) {
+			return moodle.Session{}, nil, err
+		}
+		if err := relogin(session.SchoolID); err != nil {
+			return moodle.Session{}, nil, err
+		}
+		session, client, err = load()
+		if err != nil {
+			return moodle.Session{}, nil, err
+		}
+		if err := client.ValidateSession(); err != nil {
+			if errors.Is(err, moodle.ErrSessionExpired) {
+				return moodle.Session{}, nil, fmt.Errorf("session expired, please run 'moodle login' again")
+			}
+			return moodle.Session{}, nil, err
+		}
+	}
+
+	return session, client, nil
+}
+
+func bootstrapSession() error {
+	school, username, password, err := resolveLoginInputs("", "", "")
+	if err != nil {
+		return err
+	}
+	if username == "" || password == "" || school == "" {
+		return missingSessionError()
+	}
+	return loginAndSaveSession(school, username, password)
+}
+
 func autoRelogin(schoolID string) error {
 	resolvedSchool, username, password, err := resolveLoginInputs(schoolID, "", "")
 	if err != nil {
@@ -59,8 +129,12 @@ func autoRelogin(schoolID string) error {
 		return fmt.Errorf("session expired and auto-login requires stored credentials; run 'moodle config set --username <email> --password <password>' or 'moodle login --show-browser'")
 	}
 
-	result, err := moodle.LoginWithPlaywright(moodle.LoginOptions{
-		SchoolID: resolvedSchool,
+	return loginAndSaveSession(resolvedSchool, username, password)
+}
+
+func loginAndSaveSession(school string, username string, password string) error {
+	result, err := loginWithPlaywright(moodle.LoginOptions{
+		SchoolID: school,
 		Username: username,
 		Password: password,
 		Headless: true,
@@ -77,11 +151,44 @@ func autoRelogin(schoolID string) error {
 	return nil
 }
 
+func missingSessionError() error {
+	msg := fmt.Sprintf("no saved Moodle session found at %s. Run 'moodle login' first or configure school, username, and password so the CLI can sign in automatically", opts.SessionPath)
+	if isDockerContainer() {
+		msg += ". When using Docker, mount /data to a host folder or named volume if you want separate 'docker run' commands to reuse the same session"
+	}
+	return errors.New(msg)
+}
+
+func isDockerContainer() bool {
+	_, err := os.Stat("/.dockerenv")
+	return err == nil
+}
+
+func (o loginInputOverrides) any() bool {
+	return o.School != "" || o.Username != "" || o.Password != ""
+}
+
 func resolveLoginInputs(explicitSchool string, explicitUsername string, explicitPassword string) (string, string, string, error) {
 	school := explicitSchool
 	username := explicitUsername
 	password := explicitPassword
 
+	if school == "" && runtimeLoginOverrides.School != "" {
+		school = runtimeLoginOverrides.School
+	}
+	if username == "" && runtimeLoginOverrides.Username != "" {
+		username = runtimeLoginOverrides.Username
+	}
+	if password == "" && runtimeLoginOverrides.Password != "" {
+		password = runtimeLoginOverrides.Password
+	}
+
+	if school == "" {
+		school = os.Getenv("MOODLE_SCHOOL")
+		if school == "" {
+			school = os.Getenv("OS_STUDY_SCHOOL")
+		}
+	}
 	if username == "" {
 		username = os.Getenv("MOODLE_USERNAME")
 		if username == "" {
