@@ -246,8 +246,9 @@ func completeExportCourse(_ *cobra.Command, args []string, _ string) ([]string, 
 }
 
 func completeSchoolIDs(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-	out := make([]string, 0, len(moodle.Schools))
-	for _, s := range moodle.Schools {
+	activeSchools := moodle.ActiveSchools()
+	out := make([]string, 0, len(activeSchools))
+	for _, s := range activeSchools {
 		out = append(out, formatCompValue(s.ID, s.Name))
 	}
 	return out, cobra.ShellCompDirectiveNoFileComp

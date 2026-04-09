@@ -18,9 +18,9 @@ var (
 
 var configCmd = &cobra.Command{
 	Use:     "config",
-	Short:   "Manage configuration (school, credentials, calendar)",
+	Short:   "Manage configuration (credentials, calendar, optional school override)",
 	Long:    "Show or set configuration values used by moodle-cli.\n\nUse 'config show' to inspect current values or 'config set' to update them.",
-	Example: "  moodle config show\n  moodle config set --school fhgr --username you@example.com --password \"secret\"\n  moodle config set --calendar-url \"https://.../calendar.ics\"",
+	Example: "  moodle config show\n  moodle config set --username you@example.com --password \"secret\"\n  moodle config set --calendar-url \"https://.../calendar.ics\"",
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
@@ -68,7 +68,7 @@ var configSetCmd = &cobra.Command{
 	Use:     "set",
 	Short:   "Set configuration values",
 	Long:    "Update configuration values used for login and timetable.\nOnly provided flags are updated; other values remain unchanged.",
-	Example: "  moodle config set --school fhgr --username you@example.com --password \"secret\"\n  moodle config set --calendar-url \"https://.../calendar.ics\"",
+	Example: "  moodle config set --username you@example.com --password \"secret\"\n  moodle config set --calendar-url \"https://.../calendar.ics\"",
 	ValidArgsFunction: func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
@@ -101,7 +101,7 @@ var configSetCmd = &cobra.Command{
 func init() {
 	configShowCmd.Flags().BoolVar(&cfgJSON, "json", false, "Output JSON")
 
-	configSetCmd.Flags().StringVar(&cfgSchoolID, "school", "", "School id (e.g. fhgr, phgr)")
+	configSetCmd.Flags().StringVar(&cfgSchoolID, "school", "", "School id override. Only fhgr is currently active; multi-school support is not active")
 	configSetCmd.Flags().StringVar(&cfgUsername, "username", "", "Moodle username/email")
 	configSetCmd.Flags().StringVar(&cfgPassword, "password", "", "Moodle password")
 	configSetCmd.Flags().StringVar(&cfgCalendarURL, "calendar-url", "", "ICS calendar URL")

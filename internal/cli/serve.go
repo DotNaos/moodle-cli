@@ -90,7 +90,7 @@ func init() {
 
 	serveCmd.Flags().StringVar(&serveAddr, "addr", defaultAddr, "Address to bind the API server to (e.g. :8080 or 127.0.0.1:8080)")
 	serveCmd.Flags().DurationVar(&serveShutdownTimeout, "shutdown-timeout", 10*time.Second, "Grace period for graceful shutdown")
-	serveCmd.Flags().StringVar(&serveSchool, "school", "", "School id used for a fresh login before starting the server")
+	serveCmd.Flags().StringVar(&serveSchool, "school", "", "School id override used for a fresh login. Only fhgr is currently active; multi-school support is not active")
 	serveCmd.Flags().StringVar(&serveUsername, "username", "", "Username/email used for a fresh login before starting the server")
 	serveCmd.Flags().StringVar(&servePassword, "password", "", "Password used for a fresh login before starting the server")
 

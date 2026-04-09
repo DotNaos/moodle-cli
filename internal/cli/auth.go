@@ -53,8 +53,8 @@ func ensureServeSession() error {
 		if err != nil {
 			return err
 		}
-		if school == "" || username == "" || password == "" {
-			return fmt.Errorf("serve login requires school, username, and password. Provide them via flags, environment variables, or saved config")
+		if username == "" || password == "" {
+			return fmt.Errorf("serve login requires username and password. Provide them via flags, environment variables, or saved config")
 		}
 		return loginAndSaveSession(school, username, password)
 	}
@@ -114,7 +114,7 @@ func bootstrapSession() error {
 	if err != nil {
 		return err
 	}
-	if username == "" || password == "" || school == "" {
+	if username == "" || password == "" {
 		return missingSessionError()
 	}
 	return loginAndSaveSession(school, username, password)
@@ -152,7 +152,7 @@ func loginAndSaveSession(school string, username string, password string) error 
 }
 
 func missingSessionError() error {
-	msg := fmt.Sprintf("no saved Moodle session found at %s. Run 'moodle login' first or configure school, username, and password so the CLI can sign in automatically", opts.SessionPath)
+	msg := fmt.Sprintf("no saved Moodle session found at %s. Run 'moodle login' first or configure username and password so the CLI can sign in automatically", opts.SessionPath)
 	if isDockerContainer() {
 		msg += ". When using Docker, mount /data to a host folder or named volume if you want separate 'docker run' commands to reuse the same session"
 	}
@@ -216,6 +216,10 @@ func resolveLoginInputs(explicitSchool string, explicitUsername string, explicit
 		if password == "" && cfg.Password != "" {
 			password = cfg.Password
 		}
+	}
+
+	if school == "" {
+		school = moodle.GetDefaultSchool().ID
 	}
 
 	return school, username, password, nil

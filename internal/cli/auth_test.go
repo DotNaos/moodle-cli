@@ -146,6 +146,31 @@ func TestResolveLoginInputsUsesSchoolEnvironment(t *testing.T) {
 	}
 }
 
+func TestResolveLoginInputsDefaultsToActiveSchool(t *testing.T) {
+	originalOverrides := runtimeLoginOverrides
+	originalConfigPath := opts.ConfigPath
+	runtimeLoginOverrides = loginInputOverrides{}
+	tempDir := t.TempDir()
+	opts.ConfigPath = filepath.Join(tempDir, "config.json")
+	t.Cleanup(func() {
+		runtimeLoginOverrides = originalOverrides
+		opts.ConfigPath = originalConfigPath
+	})
+
+	t.Setenv("MOODLE_SCHOOL", "")
+	t.Setenv("OS_STUDY_SCHOOL", "")
+	t.Setenv("MOODLE_USERNAME", "env-user")
+	t.Setenv("MOODLE_PASSWORD", "env-pass")
+
+	school, username, password, err := resolveLoginInputs("", "", "")
+	if err != nil {
+		t.Fatalf("expected default school to resolve, got %v", err)
+	}
+	if school != moodle.ActiveSchoolID || username != "env-user" || password != "env-pass" {
+		t.Fatalf("unexpected resolved inputs: %q %q %q", school, username, password)
+	}
+}
+
 func TestEnsureServeSessionPerformsFreshLoginWithRuntimeOverrides(t *testing.T) {
 	originalSessionPath := opts.SessionPath
 	originalConfigPath := opts.ConfigPath

@@ -32,6 +32,9 @@ func resolveSchool(id string) (SchoolConfig, error) {
 	if school == nil {
 		return SchoolConfig{}, fmt.Errorf("unknown school id: %s", id)
 	}
+	if !school.Active {
+		return SchoolConfig{}, fmt.Errorf("school id %q is not active; multi-school support is not active", id)
+	}
 	return *school, nil
 }
 

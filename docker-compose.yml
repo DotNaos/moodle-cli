@@ -6,7 +6,6 @@ services:
         environment:
             - PORT=8080
             - MOODLE_CLI_HOME=/data
-            - MOODLE_SCHOOL=${MOODLE_SCHOOL}
             - MOODLE_USERNAME=${MOODLE_USERNAME}
             - MOODLE_PASSWORD=${MOODLE_PASSWORD}
         ports:

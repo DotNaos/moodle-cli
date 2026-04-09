@@ -20,7 +20,7 @@ var loginCmd = &cobra.Command{
 	Use:     "login",
 	Short:   "Login via browser and store a session",
 	Long:    "Open a browser to log in with your Moodle username and password.\nThe session cookie is saved and reused for future commands.\n\nCredentials can be provided via flags, config, or environment variables:\n  MOODLE_USERNAME / MOODLE_PASSWORD\n  OS_STUDY_USERNAME / OS_STUDY_PASSWORD",
-	Example: "  moodle login --school fhgr --username you@example.com --password \"secret\"\n  moodle login --show-browser",
+	Example: "  moodle login --username you@example.com --password \"secret\"\n  moodle login --show-browser",
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
@@ -59,7 +59,7 @@ var loginCmd = &cobra.Command{
 }
 
 func init() {
-	loginCmd.Flags().StringVar(&loginSchool, "school", "", "School id (e.g. fhgr, phgr)")
+	loginCmd.Flags().StringVar(&loginSchool, "school", "", "School id override. Only fhgr is currently active; multi-school support is not active")
 	loginCmd.Flags().StringVar(&loginUsername, "username", "", "Username/email for login")
 	loginCmd.Flags().StringVar(&loginPassword, "password", "", "Password for login")
 	loginCmd.Flags().BoolVar(&loginShowBrowser, "show-browser", false, "Show browser window (non-headless)")

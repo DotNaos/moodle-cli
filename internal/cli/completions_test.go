@@ -57,17 +57,17 @@ func TestFlagCompletionsRegistered(t *testing.T) {
 
 func TestCompleteSchoolIDs(t *testing.T) {
 	results, directive := completeSchoolIDs(nil, nil, "")
+	activeSchools := moodle.ActiveSchools()
 
 	if directive != cobra.ShellCompDirectiveNoFileComp {
 		t.Errorf("expected ShellCompDirectiveNoFileComp, got %v", directive)
 	}
 
-	if len(results) != len(moodle.Schools) {
-		t.Errorf("expected %d schools, got %d", len(moodle.Schools), len(results))
+	if len(results) != len(activeSchools) {
+		t.Errorf("expected %d active schools, got %d", len(activeSchools), len(results))
 	}
 
-	// Verify each school ID is in the results
-	for _, school := range moodle.Schools {
+	for _, school := range activeSchools {
 		found := false
 		for _, r := range results {
 			if len(r) >= len(school.ID) && r[:len(school.ID)] == school.ID {
@@ -77,6 +77,12 @@ func TestCompleteSchoolIDs(t *testing.T) {
 		}
 		if !found {
 			t.Errorf("school %q not found in completions", school.ID)
+		}
+	}
+
+	for _, r := range results {
+		if strings.HasPrefix(r, "phgr") {
+			t.Fatalf("inactive school %q should not be offered in completions", r)
 		}
 	}
 }

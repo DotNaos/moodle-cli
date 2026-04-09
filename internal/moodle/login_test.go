@@ -42,3 +42,13 @@ func TestIsMissingPlaywrightDriverError(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveSchoolRejectsInactiveSchool(t *testing.T) {
+	_, err := resolveSchool("phgr")
+	if err == nil {
+		t.Fatal("expected inactive school to be rejected")
+	}
+	if err.Error() != `school id "phgr" is not active; multi-school support is not active` {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
