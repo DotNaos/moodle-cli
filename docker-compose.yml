@@ -1,12 +1,14 @@
 services:
-  moodle-api:
-    build: .
-    image: ghcr.io/dotnaos/moodle-cli:latest
-    command: ["serve", "--addr", ":8080"]
-    environment:
-      - PORT=8080
-      - MOODLE_CLI_HOME=/data
-    ports:
-      - "8080:8080"
-    volumes:
-      - ${HOME}/.moodle-cli:/data
+    moodle-api:
+        build: .
+        image: ghcr.io/dotnaos/moodle-cli:latest
+        command: ['serve', '--addr', ':8080']
+        environment:
+            - PORT=8080
+            - MOODLE_CLI_HOME=/data
+            - MOODLE_USERNAME=${MOODLE_USERNAME}
+            - MOODLE_PASSWORD=${MOODLE_PASSWORD}
+        ports:
+            - '8080:8080'
+        volumes:
+            - ${HOME}/.moodle-cli:/data

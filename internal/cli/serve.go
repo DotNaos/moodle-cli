@@ -25,6 +25,15 @@ var serveCmd = &cobra.Command{
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Ensure that credentials are set before starting the server
+		school, username, password, err := resolveLoginInputs("", "", "")
+		if err != nil {
+			return fmt.Errorf("failed to load configuration: %w", err)
+		}
+		if username == "" || password == "" || school == "" {
+			return fmt.Errorf("Moodle credentials (school, username, password) are required but not configured. Set MOODLE_USERNAME / MOODLE_PASSWORD or configure them via the CLI")
+		}
+
 		router, err := api.NewRouter(api.ServerOptions{
 			ClientProvider: func() (api.Client, error) {
 				return ensureAuthenticatedClient()
