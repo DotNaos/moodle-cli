@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -51,7 +52,6 @@ type localCourseSnapshot struct {
 	CourseDir string
 }
 
-var currentLectureJSON bool
 var currentLectureWorkspace string
 var currentLectureAt string
 
@@ -62,7 +62,7 @@ var currentLectureCmd = &cobra.Command{
 		"The command returns the active lecture, or the next lecture later today if none is active.\n" +
 		"It then matches the lecture to a Moodle course and ranks likely lecture materials.",
 	Example: "  moodle list current-lecture\n" +
-		"  moodle list current-lecture --json\n" +
+		"  moodle --json list current-lecture\n" +
 		"  moodle list current-lecture --workspace /Users/oli/school\n" +
 		"  moodle list current-lecture --at 2026-03-20T09:30:00+01:00",
 	Args: cobra.NoArgs,
@@ -94,22 +94,13 @@ var currentLectureCmd = &cobra.Command{
 			return err
 		}
 
-		if currentLectureJSON {
-			data, err := json.MarshalIndent(result, "", "  ")
-			if err != nil {
-				return err
-			}
-			fmt.Println(string(data))
-			return nil
-		}
-
-		renderCurrentLectureText(result)
-		return nil
+		return writeCommandOutput(cmd, result, func(w io.Writer) error {
+			return renderCurrentLectureText(w, result)
+		})
 	},
 }
 
 func init() {
-	currentLectureCmd.Flags().BoolVar(&currentLectureJSON, "json", false, "Output JSON")
 	currentLectureCmd.Flags().StringVar(&currentLectureWorkspace, "workspace", "", "Optional workspace root for local file matching")
 	currentLectureCmd.Flags().StringVar(&currentLectureAt, "at", "", "Override current time for testing (RFC3339)")
 }
@@ -505,43 +496,68 @@ func depthBelowRoot(root string, current string) int {
 	return len(strings.Split(relative, string(os.PathSeparator)))
 }
 
-func renderCurrentLectureText(result currentLectureResult) {
-	fmt.Printf("Now: %s\n", result.Now)
-	fmt.Printf("State: %s\n", result.State)
-	if result.Event == nil {
-		fmt.Println("No current or upcoming lecture found for today.")
-		return
+func renderCurrentLectureText(w io.Writer, result currentLectureResult) error {
+	if _, err := fmt.Fprintf(w, "Now: %s\n", result.Now); err != nil {
+		return err
 	}
-	fmt.Printf("Lecture: %s\n", result.Event.Summary)
-	fmt.Printf("Time: %s - %s\n", result.Event.Start.Format(time.RFC3339), result.Event.End.Format(time.RFC3339))
+	if _, err := fmt.Fprintf(w, "State: %s\n", result.State); err != nil {
+		return err
+	}
+	if result.Event == nil {
+		_, err := fmt.Fprintln(w, "No current or upcoming lecture found for today.")
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "Lecture: %s\n", result.Event.Summary); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "Time: %s - %s\n", result.Event.Start.Format(time.RFC3339), result.Event.End.Format(time.RFC3339)); err != nil {
+		return err
+	}
 	if result.Event.Location != "" {
-		fmt.Printf("Room: %s\n", result.Event.Location)
+		if _, err := fmt.Fprintf(w, "Room: %s\n", result.Event.Location); err != nil {
+			return err
+		}
 	}
 	if result.Course != nil {
-		fmt.Printf("Course: %s [%d]\n", result.Course.Title, result.Course.ID)
+		if _, err := fmt.Fprintf(w, "Course: %s [%d]\n", result.Course.Title, result.Course.ID); err != nil {
+			return err
+		}
 	}
 	if result.Material != nil {
-		fmt.Printf("Best material: %s\n", result.Material.Label)
+		if _, err := fmt.Fprintf(w, "Best material: %s\n", result.Material.Label); err != nil {
+			return err
+		}
 		if result.Material.LocalPath != nil {
-			fmt.Printf("Local file: %s\n", *result.Material.LocalPath)
+			if _, err := fmt.Fprintf(w, "Local file: %s\n", *result.Material.LocalPath); err != nil {
+				return err
+			}
 		} else {
-			fmt.Printf("URL: %s\n", result.Material.URL)
+			if _, err := fmt.Fprintf(w, "URL: %s\n", result.Material.URL); err != nil {
+				return err
+			}
 		}
 	}
 	if result.Warning != "" {
-		fmt.Printf("Warning: %s\n", result.Warning)
+		if _, err := fmt.Fprintf(w, "Warning: %s\n", result.Warning); err != nil {
+			return err
+		}
 	}
 	if len(result.Resources) == 0 {
-		return
+		return nil
 	}
-	fmt.Println("Resources:")
+	if _, err := fmt.Fprintln(w, "Resources:"); err != nil {
+		return err
+	}
 	for index, resource := range result.Resources {
 		line := fmt.Sprintf("%d. %s [%s]", index+1, resource.Label, resource.Kind)
 		if resource.LocalPath != nil {
 			line += " local"
 		}
-		fmt.Println(line)
+		if _, err := fmt.Fprintln(w, line); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func buildSelectedCourseResult(client *moodle.Client, courseArg string, resourceArg string, workspace string, at string) (currentLectureResult, error) {

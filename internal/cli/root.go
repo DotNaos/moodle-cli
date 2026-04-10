@@ -25,6 +25,12 @@ var rootCmd = &cobra.Command{
 	Short: "CLI for FHGR Moodle",
 	Long:  "Command-line access to Moodle for listing courses and files, downloading resources, exporting courses, and viewing your timetable.",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateOutputFlags(); err != nil {
+			return err
+		}
+		if err := ensureMachineOutputAllowed(cmd); err != nil {
+			return err
+		}
 		return maybeCheckForUpdates(cmd)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -33,18 +39,27 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
+	rootCmd.CompletionOptions.DisableDefaultCmd = true
+
 	rootCmd.PersistentFlags().StringVar(&opts.ConfigPath, "config", config.ConfigPath(), "Config file path")
 	rootCmd.PersistentFlags().StringVar(&opts.SessionPath, "session", config.SessionPath(), "Session cookie file path")
 	rootCmd.PersistentFlags().StringVar(&opts.CacheDBPath, "cache", config.CacheDBPath(), "SQLite cache path")
 	rootCmd.PersistentFlags().StringVar(&opts.FileCacheDir, "files-cache", config.FileCacheDir(), "File cache directory")
 	rootCmd.PersistentFlags().StringVar(&opts.StatePath, "state", config.StatePath(), "State file path")
 	rootCmd.PersistentFlags().StringVar(&opts.ExportDir, "output-dir", config.ExportDir(), "Output directory")
+	rootCmd.PersistentFlags().BoolVar(&outputJSON, "json", false, "Output machine-readable JSON")
+	rootCmd.PersistentFlags().BoolVar(&outputYAML, "yaml", false, "Output machine-readable YAML")
+	rootCmd.PersistentFlags().BoolVar(&outputYML, "yml", false, "Alias for --yaml")
 	rootCmd.PersistentFlags().BoolVar(&opts.Unsanitized, "unsanitized", false, "Preserve raw scraped names instead of sanitized defaults")
 
 	rootCmd.SetHelpTemplate(fmt.Sprintf("%s\n\nDefault paths:\n  config: %s\n  session: %s\n  cache: %s\n  files: %s\n  state: %s\n  output: %s\n", rootCmd.HelpTemplate(), config.ConfigPath(), config.SessionPath(), config.CacheDBPath(), config.FileCacheDir(), config.StatePath(), config.ExportDir()))
 	rootCmd.SilenceUsage = true
+	rootCmd.SilenceErrors = true
+	markInteractiveOnly(rootCmd)
+	installMachineHelp()
 
 	rootCmd.AddCommand(
+		completionCmd,
 		configCmd,
 		loginCmd,
 		listCmd,
@@ -61,7 +76,11 @@ func init() {
 }
 
 func Execute() error {
-	return rootCmd.Execute()
+	err := rootCmd.Execute()
+	if err != nil {
+		writeCommandError(err)
+	}
+	return err
 }
 
 func commandPathHas(cmd *cobra.Command, name string) bool {

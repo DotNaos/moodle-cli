@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -15,6 +16,13 @@ var loginPassword string
 var loginHeadless bool = true
 var loginShowBrowser bool
 var loginTimeout time.Duration
+
+type loginCommandResult struct {
+	Status      string `json:"status" yaml:"status"`
+	SchoolID    string `json:"schoolId" yaml:"schoolId"`
+	SessionPath string `json:"sessionPath" yaml:"sessionPath"`
+	CreatedAt   string `json:"createdAt" yaml:"createdAt"`
+}
 
 var loginCmd = &cobra.Command{
 	Use:     "login",
@@ -50,11 +58,23 @@ var loginCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("session saved to %s\n", opts.SessionPath)
-		if isDockerContainer() && (opts.SessionPath == "/data/session.json" || strings.HasPrefix(opts.SessionPath, "/data/")) {
-			fmt.Println("Mount /data to a host folder or named volume if you want separate 'docker run' commands to reuse this session.")
+		output := loginCommandResult{
+			Status:      "saved",
+			SchoolID:    payload.SchoolID,
+			SessionPath: opts.SessionPath,
+			CreatedAt:   payload.CreatedAt.Format(time.RFC3339),
 		}
-		return nil
+		return writeCommandOutput(cmd, output, func(w io.Writer) error {
+			if _, err := fmt.Fprintf(w, "session saved to %s\n", opts.SessionPath); err != nil {
+				return err
+			}
+			if isDockerContainer() && (opts.SessionPath == "/data/session.json" || strings.HasPrefix(opts.SessionPath, "/data/")) {
+				if _, err := fmt.Fprintln(w, "Mount /data to a host folder or named volume if you want separate 'docker run' commands to reuse this session."); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
 	},
 }
 

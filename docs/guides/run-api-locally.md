@@ -24,7 +24,13 @@ curl http://127.0.0.1:8080/healthz
 curl http://127.0.0.1:8080/api/courses
 ```
 
-4. Keep the terminal open while you use the API.
+4. Open the built-in API reference in your browser when you want to explore the endpoints.
+
+```sh
+open http://127.0.0.1:8080/docs
+```
+
+5. Keep the terminal open while you use the API.
 
 ## Fresh login on server start
 

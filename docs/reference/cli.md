@@ -6,14 +6,22 @@ Use this page when you want the exact command for a common task.
 
 - `moodle` opens the interactive view.
 - `moodle login` creates or refreshes the saved session.
-- `moodle serve --addr :8080` starts the local JSON API.
+- `moodle serve --addr :8080` starts the local JSON API and serves the built-in Scalar reference at `/docs`.
 - `moodle update` installs the latest stable release.
 
 ## List data
 
 ```sh
-moodle list courses --json
-moodle list files <course-id|name|current|0> --json
+moodle --json list courses
+moodle --yaml list files <course-id|name|current|0>
+```
+
+Global machine-readable output is available on all non-interactive commands:
+
+```sh
+moodle --json <command>
+moodle --yaml <command>
+moodle --yml <command>
 ```
 
 ## Open in your browser

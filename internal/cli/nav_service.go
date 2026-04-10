@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"slices"
@@ -329,14 +328,21 @@ func (s *navService) Preview(node navNode) string {
 	}
 }
 
-func (s *navService) Open(node navNode) error {
+func (s *navService) Open(node navNode) (string, error) {
 	switch {
 	case node.Resource != nil:
-		return openResolvedResource(s.client, *node.Resource)
+		result, err := openResolvedResource(s.client, *node.Resource)
+		if err != nil {
+			return "", err
+		}
+		return result.Target, nil
 	case node.Course != nil && strings.TrimSpace(node.Course.ViewURL) != "":
-		return openURL(node.Course.ViewURL)
+		if err := openURL(node.Course.ViewURL); err != nil {
+			return "", err
+		}
+		return node.Course.ViewURL, nil
 	default:
-		return fmt.Errorf("node %q cannot be opened", node.Title)
+		return "", fmt.Errorf("node %q cannot be opened", node.Title)
 	}
 }
 
@@ -995,9 +1001,4 @@ func slugNavSegment(value string) string {
 		return "item"
 	}
 	return result
-}
-
-func renderNavSummary(summary navSummary) string {
-	data, _ := json.MarshalIndent(summary, "", "  ")
-	return string(data)
 }

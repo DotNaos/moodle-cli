@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -23,6 +26,9 @@ type Client interface {
 // ServerOptions configure the HTTP router.
 type ServerOptions struct {
 	ClientProvider func() (Client, error)
+	CommandRoutes  []CommandRoute
+	CommandRunner  CommandRunner
+	LogWriter      io.Writer
 }
 
 // NewRouter builds a chi router exposing the REST API.
@@ -35,16 +41,30 @@ func NewRouter(opts ServerOptions) (*chi.Mux, error) {
 	router.Use(
 		middleware.RequestID,
 		middleware.RealIP,
-		middleware.Logger,
+		middleware.RequestLogger(&middleware.DefaultLogFormatter{
+			Logger:  log.New(resolveLogWriter(opts.LogWriter), "", log.LstdFlags),
+			NoColor: true,
+		}),
 		middleware.Recoverer,
 		middleware.Timeout(60*time.Second),
 	)
 
+	router.Get(openAPIPath, openAPIHandler(opts))
+	router.Get(docsPath, scalarHandler())
+	router.Get(scalarPath, scalarHandler())
 	router.Get("/healthz", healthHandler(opts))
 	router.Get("/api/courses", coursesHandler(opts))
 	router.Get("/api/courses/{courseID}/resources", courseResourcesHandler(opts))
+	registerCommandRoutes(router, opts)
 
 	return router, nil
+}
+
+func resolveLogWriter(writer io.Writer) io.Writer {
+	if writer != nil {
+		return writer
+	}
+	return os.Stderr
 }
 
 func healthHandler(opts ServerOptions) http.HandlerFunc {

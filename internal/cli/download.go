@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"mime"
 	"net/url"
 	"os"
@@ -16,6 +17,17 @@ import (
 
 var downloadAll bool
 var downloadOutputDir string
+
+type downloadedFileResult struct {
+	ResourceID string `json:"resourceId" yaml:"resourceId"`
+	Name       string `json:"name" yaml:"name"`
+	Path       string `json:"path" yaml:"path"`
+}
+
+type downloadCommandResult struct {
+	Action string                 `json:"action" yaml:"action"`
+	Files  []downloadedFileResult `json:"files" yaml:"files"`
+}
 
 var downloadCmd = &cobra.Command{
 	Use:               "download file <course-id|name|current|0> <resource-id|name|current|0>",
@@ -57,7 +69,13 @@ var downloadCmd = &cobra.Command{
 		}
 
 		if downloadAll {
-			return downloadAllResources(client, resources, downloadOutputDir)
+			result, err := downloadAllResources(client, resources, downloadOutputDir)
+			if err != nil {
+				return err
+			}
+			return writeCommandOutput(cmd, result, func(w io.Writer) error {
+				return nil
+			})
 		}
 
 		target, err := resolveResourceWithOptions(client, courseID, resources, args[2], selectorOptions{})
@@ -67,7 +85,21 @@ var downloadCmd = &cobra.Command{
 		if target.Type != "resource" {
 			return fmt.Errorf("resource %s is not a file", target.ID)
 		}
-		return downloadResourceToPath(client, *target, downloadOutputDir)
+		path, err := downloadResourceToPath(client, *target, downloadOutputDir)
+		if err != nil {
+			return err
+		}
+		result := downloadCommandResult{
+			Action: "download",
+			Files: []downloadedFileResult{{
+				ResourceID: target.ID,
+				Name:       target.Name,
+				Path:       path,
+			}},
+		}
+		return writeCommandOutput(cmd, result, func(w io.Writer) error {
+			return nil
+		})
 	},
 }
 
@@ -76,10 +108,14 @@ func init() {
 	downloadCmd.Flags().StringVarP(&downloadOutputDir, "output-dir", "o", "", "Output directory (or file path for single download)")
 }
 
-func downloadAllResources(client *moodle.Client, resources []moodle.Resource, outputPath string) error {
+func downloadAllResources(client *moodle.Client, resources []moodle.Resource, outputPath string) (downloadCommandResult, error) {
 	outputPath = resolveDefaultOutputDir(outputPath)
 	if err := ensureDir(outputPath); err != nil {
-		return err
+		return downloadCommandResult{}, err
+	}
+	result := downloadCommandResult{
+		Action: "download",
+		Files:  []downloadedFileResult{},
 	}
 
 	for _, res := range resources {
@@ -88,21 +124,26 @@ func downloadAllResources(client *moodle.Client, resources []moodle.Resource, ou
 		}
 		path, err := resolveOutputPath(outputPath, res)
 		if err != nil {
-			return err
+			return downloadCommandResult{}, err
 		}
 		if err := downloadResourceToFile(client, res, path); err != nil {
-			return err
+			return downloadCommandResult{}, err
 		}
+		result.Files = append(result.Files, downloadedFileResult{
+			ResourceID: res.ID,
+			Name:       res.Name,
+			Path:       path,
+		})
 	}
-	return nil
+	return result, nil
 }
 
-func downloadResourceToPath(client *moodle.Client, res moodle.Resource, outputPath string) error {
+func downloadResourceToPath(client *moodle.Client, res moodle.Resource, outputPath string) (string, error) {
 	path, err := resolveOutputPath(outputPath, res)
 	if err != nil {
-		return err
+		return "", err
 	}
-	return downloadResourceToFile(client, res, path)
+	return path, downloadResourceToFile(client, res, path)
 }
 
 func downloadResourceToFile(client *moodle.Client, res moodle.Resource, path string) error {

@@ -1,10 +1,13 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/DotNaos/moodle-cli/internal/moodle"
@@ -58,6 +61,182 @@ func TestHealthHandlerOK(t *testing.T) {
 	}
 	if payload["status"] != "ok" {
 		t.Fatalf("unexpected payload: %#v", payload)
+	}
+}
+
+func TestOpenAPIHandler(t *testing.T) {
+	router, err := NewRouter(ServerOptions{
+		ClientProvider: func() (Client, error) {
+			return stubClient{}, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewRouter: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/openapi.json", nil)
+	req.Host = "api.localhost:8080"
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "application/json") {
+		t.Fatalf("expected JSON content type, got %q", got)
+	}
+
+	var payload map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload["openapi"] != "3.0.3" {
+		t.Fatalf("unexpected openapi version: %#v", payload["openapi"])
+	}
+
+	servers, ok := payload["servers"].([]any)
+	if !ok || len(servers) != 1 {
+		t.Fatalf("unexpected servers payload: %#v", payload["servers"])
+	}
+	server, ok := servers[0].(map[string]any)
+	if !ok || server["url"] != "http://api.localhost:8080" {
+		t.Fatalf("unexpected server url: %#v", servers[0])
+	}
+
+	paths, ok := payload["paths"].(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected paths payload: %#v", payload["paths"])
+	}
+	if _, ok := paths["/healthz"]; !ok {
+		t.Fatalf("expected /healthz path, got %#v", paths)
+	}
+	if _, ok := paths["/api/courses"]; !ok {
+		t.Fatalf("expected /api/courses path, got %#v", paths)
+	}
+}
+
+func TestScalarDocsHandler(t *testing.T) {
+	router, err := NewRouter(ServerOptions{
+		ClientProvider: func() (Client, error) {
+			return stubClient{}, nil
+		},
+		CommandRoutes: []CommandRoute{
+			{
+				APIPath:     "/api/cli/version",
+				CommandPath: []string{"version"},
+				Summary:     "Show version information",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewRouter: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/docs", nil)
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "text/html") {
+		t.Fatalf("expected HTML content type, got %q", got)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "@scalar/api-reference") {
+		t.Fatalf("expected Scalar script in body, got %q", body)
+	}
+	if !strings.Contains(body, openAPIPath) {
+		t.Fatalf("expected OpenAPI path in body, got %q", body)
+	}
+}
+
+func TestGeneratedCommandEndpoint(t *testing.T) {
+	called := false
+	var gotPath []string
+	var gotArgs []string
+
+	router, err := NewRouter(ServerOptions{
+		ClientProvider: func() (Client, error) {
+			return stubClient{}, nil
+		},
+		CommandRoutes: []CommandRoute{
+			{
+				APIPath:     "/api/cli/version",
+				CommandPath: []string{"version"},
+				Summary:     "Show version information",
+			},
+		},
+		CommandRunner: func(_ context.Context, commandPath []string, arguments []string, stdout io.Writer, _ io.Writer) error {
+			called = true
+			gotPath = append([]string{}, commandPath...)
+			gotArgs = append([]string{}, arguments...)
+			_, err := io.WriteString(stdout, `{"version":"v1.2.3"}`)
+			return err
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewRouter: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/cli/version", strings.NewReader(`{"arguments":["--check"]}`))
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if !called {
+		t.Fatal("expected command runner to be invoked")
+	}
+	if strings.Join(gotPath, " ") != "version" {
+		t.Fatalf("unexpected command path: %#v", gotPath)
+	}
+	if strings.Join(gotArgs, " ") != "--check" {
+		t.Fatalf("unexpected command arguments: %#v", gotArgs)
+	}
+
+	var payload map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload["version"] != "v1.2.3" {
+		t.Fatalf("unexpected payload: %#v", payload)
+	}
+}
+
+func TestOpenAPIIncludesGeneratedCommandEndpoints(t *testing.T) {
+	router, err := NewRouter(ServerOptions{
+		ClientProvider: func() (Client, error) {
+			return stubClient{}, nil
+		},
+		CommandRoutes: []CommandRoute{
+			{
+				APIPath:     "/api/cli/version",
+				CommandPath: []string{"version"},
+				Summary:     "Show version information",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewRouter: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/openapi.json", nil)
+	router.ServeHTTP(rec, req)
+
+	var payload map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	paths, ok := payload["paths"].(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected paths payload: %#v", payload["paths"])
+	}
+	if _, ok := paths["/api/cli/version"]; !ok {
+		t.Fatalf("expected generated command path, got %#v", paths)
 	}
 }
 

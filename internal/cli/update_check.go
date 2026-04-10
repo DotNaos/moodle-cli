@@ -54,6 +54,9 @@ func shouldCheckForUpdates(cmd *cobra.Command) bool {
 	if cmd == nil {
 		return false
 	}
+	if isMachineOutput() {
+		return false
+	}
 	if !isInteractiveTerminal(os.Stderr) {
 		return false
 	}

@@ -1,8 +1,8 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/DotNaos/moodle-cli/internal/config"
@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var timetableJSON bool
 var timetableDays int
 var timetableUnique bool
 var timetableNextWeek bool
@@ -19,7 +18,7 @@ var timetableCmd = &cobra.Command{
 	Use:     "timetable",
 	Short:   "List timetable events",
 	Long:    "List upcoming timetable events from your calendar.\n\nRequires a calendar URL set in config (config set --calendar-url).",
-	Example: "  moodle list timetable\n  moodle list timetable --days 30\n  moodle list timetable --json",
+	Example: "  moodle list timetable\n  moodle list timetable --days 30\n  moodle --json list timetable",
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
@@ -46,38 +45,29 @@ var timetableCmd = &cobra.Command{
 		}
 
 		if timetableUnique {
-			if timetableJSON {
-				data, err := json.MarshalIndent(uniqueSummaries(events), "", "  ")
-				if err != nil {
+			summaries := uniqueSummaries(events)
+			return writeCommandOutput(cmd, summaries, func(w io.Writer) error {
+				for _, entry := range summaries {
+					if _, err := fmt.Fprintln(w, entry); err != nil {
+						return err
+					}
+				}
+				return nil
+			})
+		}
+
+		return writeCommandOutput(cmd, events, func(w io.Writer) error {
+			for _, d := range events {
+				if _, err := fmt.Fprintf(w, "%s\t%s\t%s\n", d.Start.Format(time.RFC3339), d.Summary, d.Location); err != nil {
 					return err
 				}
-				fmt.Println(string(data))
-				return nil
-			}
-			for _, entry := range uniqueSummaries(events) {
-				fmt.Println(entry)
 			}
 			return nil
-		}
-
-		if timetableJSON {
-			data, err := json.MarshalIndent(events, "", "  ")
-			if err != nil {
-				return err
-			}
-			fmt.Println(string(data))
-			return nil
-		}
-
-		for _, d := range events {
-			fmt.Printf("%s\t%s\t%s\n", d.Start.Format(time.RFC3339), d.Summary, d.Location)
-		}
-		return nil
+		})
 	},
 }
 
 func init() {
-	timetableCmd.Flags().BoolVar(&timetableJSON, "json", false, "Output JSON")
 	timetableCmd.Flags().IntVar(&timetableDays, "days", 90, "Number of days to look ahead")
 	timetableCmd.Flags().BoolVar(&timetableUnique, "unique", false, "Show unique event summaries only")
 	timetableCmd.Flags().BoolVar(&timetableNextWeek, "next-week", false, "Only show events from the next week with entries")

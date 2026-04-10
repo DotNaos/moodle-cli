@@ -16,7 +16,7 @@ moodle login
 Then check it:
 
 ```sh
-moodle list courses --json
+moodle --json list courses
 ```
 
 ## `session expired`

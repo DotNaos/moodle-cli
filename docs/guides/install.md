@@ -39,7 +39,7 @@ You should see `session saved to ...`.
 5. Check that it works.
 
 ```sh
-moodle list courses --json
+moodle --json list courses
 ```
 
 6. If you want the local API next, continue in [Run the API locally](run-api-locally.md).

@@ -1,13 +1,12 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
+	"io"
 
 	"github.com/spf13/cobra"
 )
 
-var listSelectionJSON bool
 var listSelectionWorkspace string
 var listSelectionAt string
 
@@ -32,7 +31,7 @@ var listCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		args = expandSingleCurrentAlias(args)
 		if len(args) == 0 {
-			return cmd.Help()
+			return helpOrMachineError(cmd, "expected either a subcommand or exactly 2 arguments: <course> <resource>")
 		}
 		client, err := ensureAuthenticatedClient()
 		if err != nil {
@@ -42,21 +41,13 @@ var listCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		if listSelectionJSON {
-			data, err := json.MarshalIndent(result, "", "  ")
-			if err != nil {
-				return err
-			}
-			fmt.Println(string(data))
-			return nil
-		}
-		renderCurrentLectureText(result)
-		return nil
+		return writeCommandOutput(cmd, result, func(w io.Writer) error {
+			return renderCurrentLectureText(w, result)
+		})
 	},
 }
 
 func init() {
-	listCmd.Flags().BoolVar(&listSelectionJSON, "json", false, "Output JSON")
 	listCmd.Flags().StringVar(&listSelectionWorkspace, "workspace", "", "Optional workspace root for local file matching")
 	listCmd.Flags().StringVar(&listSelectionAt, "at", "", "Override current time for testing (RFC3339)")
 	listCmd.AddCommand(

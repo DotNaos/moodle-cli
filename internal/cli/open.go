@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,14 @@ var openCurrentLectureWorkspace string
 var openCurrentLectureAt string
 var moodleDownloadFileToBuffer = func(client *moodle.Client, url string) (moodle.DownloadResult, error) {
 	return client.DownloadFileToBuffer(url)
+}
+
+type openCommandResult struct {
+	Action     string `json:"action" yaml:"action"`
+	Target     string `json:"target" yaml:"target"`
+	TargetType string `json:"targetType" yaml:"targetType"`
+	CourseID   string `json:"courseId,omitempty" yaml:"courseId,omitempty"`
+	ResourceID string `json:"resourceId,omitempty" yaml:"resourceId,omitempty"`
 }
 
 var openCmd = &cobra.Command{
@@ -36,9 +45,15 @@ var openCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		args = expandSingleCurrentAlias(args)
 		if len(args) == 0 {
-			return cmd.Help()
+			return helpOrMachineError(cmd, "expected either a subcommand or exactly 2 arguments: <course> <resource>")
 		}
-		return runOpenResourceSelection(args[0], args[1])
+		result, err := runOpenResourceSelection(args[0], args[1])
+		if err != nil {
+			return err
+		}
+		return writeCommandOutput(cmd, result, func(w io.Writer) error {
+			return nil
+		})
 	},
 }
 
@@ -72,7 +87,18 @@ var openCourseCmd = &cobra.Command{
 			return fmt.Errorf("course %s has no view URL", courseID)
 		}
 
-		return openURL(course.ViewURL)
+		if err := openURL(course.ViewURL); err != nil {
+			return err
+		}
+		result := openCommandResult{
+			Action:     "open",
+			Target:     course.ViewURL,
+			TargetType: "course_url",
+			CourseID:   courseID,
+		}
+		return writeCommandOutput(cmd, result, func(w io.Writer) error {
+			return nil
+		})
 	},
 }
 
@@ -102,7 +128,14 @@ var openResourceCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		return openResolvedResource(client, *target)
+		result, err := openResolvedResource(client, *target)
+		if err != nil {
+			return err
+		}
+		result.CourseID = courseID
+		return writeCommandOutput(cmd, result, func(w io.Writer) error {
+			return nil
+		})
 	},
 }
 
@@ -147,13 +180,32 @@ var openCurrentLectureCmd = &cobra.Command{
 				Type:     "resource",
 				FileType: result.Material.FileType,
 			}
-			return openResolvedResource(client, resource)
+			output, err := openResolvedResource(client, resource)
+			if err != nil {
+				return err
+			}
+			return writeCommandOutput(cmd, output, func(w io.Writer) error {
+				return nil
+			})
 		}
 		target, err := currentLectureOpenTarget(result)
 		if err != nil {
 			return err
 		}
-		return openURL(target)
+		if err := openURL(target); err != nil {
+			return err
+		}
+		output := openCommandResult{
+			Action:     "open",
+			Target:     target,
+			TargetType: "course_url",
+		}
+		if result.Course != nil {
+			output.CourseID = fmt.Sprintf("%d", result.Course.ID)
+		}
+		return writeCommandOutput(cmd, output, func(w io.Writer) error {
+			return nil
+		})
 	},
 }
 
@@ -167,24 +219,29 @@ func init() {
 	)
 }
 
-func runOpenResourceSelection(courseArg string, resourceArg string) error {
+func runOpenResourceSelection(courseArg string, resourceArg string) (openCommandResult, error) {
 	client, err := ensureAuthenticatedClient()
 	if err != nil {
-		return err
+		return openCommandResult{}, err
 	}
 	courseID, err := resolveCourseIDWithOptions(client, courseArg, selectorOptions{})
 	if err != nil {
-		return err
+		return openCommandResult{}, err
 	}
 	resources, _, err := client.FetchCourseResources(courseID)
 	if err != nil {
-		return err
+		return openCommandResult{}, err
 	}
 	target, err := resolveResourceWithOptions(client, courseID, resources, resourceArg, selectorOptions{})
 	if err != nil {
-		return err
+		return openCommandResult{}, err
 	}
-	return openResolvedResource(client, *target)
+	result, err := openResolvedResource(client, *target)
+	if err != nil {
+		return openCommandResult{}, err
+	}
+	result.CourseID = courseID
+	return result, nil
 }
 
 func currentLectureOpenTarget(result currentLectureResult) (string, error) {
@@ -209,18 +266,34 @@ func findCourseByID(courses []moodle.Course, courseID string) (*moodle.Course, e
 	return nil, fmt.Errorf("course not found: %s", courseID)
 }
 
-func openResolvedResource(client *moodle.Client, resource moodle.Resource) error {
+func openResolvedResource(client *moodle.Client, resource moodle.Resource) (openCommandResult, error) {
 	if strings.TrimSpace(resource.URL) == "" {
-		return fmt.Errorf("resource %s has no URL", resource.ID)
+		return openCommandResult{}, fmt.Errorf("resource %s has no URL", resource.ID)
 	}
 	if resource.Type != "resource" {
-		return openURL(resource.URL)
+		if err := openURL(resource.URL); err != nil {
+			return openCommandResult{}, err
+		}
+		return openCommandResult{
+			Action:     "open",
+			Target:     resource.URL,
+			TargetType: "resource_url",
+			ResourceID: resource.ID,
+		}, nil
 	}
 	path, err := downloadResourceToTempFile(client, resource)
 	if err != nil {
-		return err
+		return openCommandResult{}, err
 	}
-	return openURL(path)
+	if err := openURL(path); err != nil {
+		return openCommandResult{}, err
+	}
+	return openCommandResult{
+		Action:     "open",
+		Target:     path,
+		TargetType: "local_file",
+		ResourceID: resource.ID,
+	}, nil
 }
 
 func downloadResourceToTempFile(client *moodle.Client, resource moodle.Resource) (string, error) {

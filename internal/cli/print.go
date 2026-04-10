@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -13,6 +14,15 @@ import (
 var printRaw bool
 var printCurrentLectureWorkspace string
 var printCurrentLectureAt string
+
+type printCommandResult struct {
+	Action     string `json:"action" yaml:"action"`
+	CourseID   string `json:"courseId,omitempty" yaml:"courseId,omitempty"`
+	ResourceID string `json:"resourceId,omitempty" yaml:"resourceId,omitempty"`
+	URL        string `json:"url,omitempty" yaml:"url,omitempty"`
+	FileType   string `json:"fileType,omitempty" yaml:"fileType,omitempty"`
+	Text       string `json:"text" yaml:"text"`
+}
 
 var printCmd = &cobra.Command{
 	Use:              "print [course] [resource]",
@@ -34,9 +44,16 @@ var printCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		args = expandSingleCurrentAlias(args)
 		if len(args) == 0 {
-			return cmd.Help()
+			return helpOrMachineError(cmd, "expected either a subcommand or exactly 2 arguments: <course> <resource>")
 		}
-		return runPrintSelection(args[0], args[1])
+		result, err := runPrintSelection(args[0], args[1])
+		if err != nil {
+			return err
+		}
+		return writeCommandOutput(cmd, result, func(w io.Writer) error {
+			_, err := fmt.Fprintln(w, result.Text)
+			return err
+		})
 	},
 }
 
@@ -48,7 +65,14 @@ var printCourseCmd = &cobra.Command{
 	Args:              cobra.ExactArgs(2),
 	ValidArgsFunction: completePrintCourseFile,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runPrintSelection(args[0], args[1])
+		result, err := runPrintSelection(args[0], args[1])
+		if err != nil {
+			return err
+		}
+		return writeCommandOutput(cmd, result, func(w io.Writer) error {
+			_, err := fmt.Fprintln(w, result.Text)
+			return err
+		})
 	},
 }
 
@@ -95,8 +119,20 @@ var printCurrentLectureCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Println(text)
-		return nil
+		output := printCommandResult{
+			Action:     "print",
+			URL:        result.Material.URL,
+			ResourceID: result.Material.ID,
+			FileType:   result.Material.FileType,
+			Text:       text,
+		}
+		if result.Course != nil {
+			output.CourseID = fmt.Sprintf("%d", result.Course.ID)
+		}
+		return writeCommandOutput(cmd, output, func(w io.Writer) error {
+			_, err := fmt.Fprintln(w, text)
+			return err
+		})
 	},
 }
 
@@ -110,34 +146,40 @@ func init() {
 	)
 }
 
-func runPrintSelection(courseArg string, resourceArg string) error {
+func runPrintSelection(courseArg string, resourceArg string) (printCommandResult, error) {
 	client, err := ensureAuthenticatedClient()
 	if err != nil {
-		return err
+		return printCommandResult{}, err
 	}
 
 	courseID, err := resolveCourseIDWithOptions(client, courseArg, selectorOptions{})
 	if err != nil {
-		return err
+		return printCommandResult{}, err
 	}
 	resources, _, err := client.FetchCourseResources(courseID)
 	if err != nil {
-		return err
+		return printCommandResult{}, err
 	}
 	target, err := resolveResourceWithOptions(client, courseID, resources, resourceArg, selectorOptions{})
 	if err != nil {
-		return err
+		return printCommandResult{}, err
 	}
 	if target.Type != "resource" {
-		return fmt.Errorf("resource %s is not a file", target.ID)
+		return printCommandResult{}, fmt.Errorf("resource %s is not a file", target.ID)
 	}
 
 	text, err := renderDownloadedResource(client, target.URL, target.FileType, printRaw)
 	if err != nil {
-		return err
+		return printCommandResult{}, err
 	}
-	fmt.Println(text)
-	return nil
+	return printCommandResult{
+		Action:     "print",
+		CourseID:   courseID,
+		ResourceID: target.ID,
+		URL:        target.URL,
+		FileType:   target.FileType,
+		Text:       text,
+	}, nil
 }
 
 func renderDownloadedResource(client *moodle.Client, url string, fileType string, raw bool) (string, error) {

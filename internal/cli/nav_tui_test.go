@@ -37,9 +37,9 @@ func (f *fakeNavigator) Print(node navNode) (string, error) {
 func (f *fakeNavigator) Children(node navNode) ([]navNode, error) {
 	return f.children[node.Key], nil
 }
-func (f *fakeNavigator) Open(node navNode) error {
+func (f *fakeNavigator) Open(node navNode) (string, error) {
 	f.opened = append(f.opened, node.Key)
-	return nil
+	return node.Key, nil
 }
 func (f *fakeNavigator) Download(node navNode, outputPath string) (string, error) {
 	f.downloads = append(f.downloads, outputPath)

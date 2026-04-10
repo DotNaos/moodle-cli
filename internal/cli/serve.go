@@ -3,6 +3,8 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,6 +22,14 @@ var serveSchool string
 var serveUsername string
 var servePassword string
 
+type serveEvent struct {
+	Type   string `json:"type" yaml:"type"`
+	Addr   string `json:"addr,omitempty" yaml:"addr,omitempty"`
+	Docs   string `json:"docs,omitempty" yaml:"docs,omitempty"`
+	Signal string `json:"signal,omitempty" yaml:"signal,omitempty"`
+	Error  string `json:"error,omitempty" yaml:"error,omitempty"`
+}
+
 var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Start the REST API server",
@@ -34,17 +44,25 @@ var serveCmd = &cobra.Command{
 			Password: servePassword,
 		}
 
-		if err := ensureServeSession(); err != nil {
+		if err := emitServeStatus(cmd, serveEvent{Type: "starting", Addr: serveAddr}); err != nil {
 			return err
+		}
+		if err := ensureServeSession(); err != nil {
+			_ = emitServeStatus(cmd, serveEvent{Type: "fatal", Addr: serveAddr, Error: err.Error()})
+			return markErrorEmitted(err)
 		}
 
 		router, err := api.NewRouter(api.ServerOptions{
 			ClientProvider: func() (api.Client, error) {
 				return ensureAuthenticatedClient()
 			},
+			CommandRoutes: buildAPICommandRoutes(),
+			CommandRunner: runAPICommand,
+			LogWriter:     cmd.ErrOrStderr(),
 		})
 		if err != nil {
-			return err
+			_ = emitServeStatus(cmd, serveEvent{Type: "fatal", Addr: serveAddr, Error: err.Error()})
+			return markErrorEmitted(err)
 		}
 
 		server := &http.Server{
@@ -53,11 +71,20 @@ var serveCmd = &cobra.Command{
 			ReadHeaderTimeout: 10 * time.Second,
 		}
 
-		fmt.Printf("Starting Moodle API server on %s\n", serveAddr)
+		listener, err := net.Listen("tcp", serveAddr)
+		if err != nil {
+			_ = emitServeStatus(cmd, serveEvent{Type: "fatal", Addr: serveAddr, Error: err.Error()})
+			return markErrorEmitted(err)
+		}
+		readyAddr := listener.Addr().String()
+		if err := emitServeStatus(cmd, serveEvent{Type: "ready", Addr: readyAddr, Docs: serveDocsURL(readyAddr)}); err != nil {
+			listener.Close()
+			return err
+		}
 
 		errCh := make(chan error, 1)
 		go func() {
-			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
 				errCh <- err
 			}
 		}()
@@ -67,9 +94,12 @@ var serveCmd = &cobra.Command{
 
 		select {
 		case err := <-errCh:
-			return err
+			_ = emitServeStatus(cmd, serveEvent{Type: "fatal", Addr: listener.Addr().String(), Error: err.Error()})
+			return markErrorEmitted(err)
 		case sig := <-sigCh:
-			fmt.Printf("Received %s, shutting down...\n", sig)
+			if err := emitServeStatus(cmd, serveEvent{Type: "shutdown", Addr: listener.Addr().String(), Signal: sig.String()}); err != nil {
+				return err
+			}
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), serveShutdownTimeout)
@@ -95,4 +125,49 @@ func init() {
 	serveCmd.Flags().StringVar(&servePassword, "password", "", "Password used for a fresh login before starting the server")
 
 	serveCmd.RegisterFlagCompletionFunc("school", completeSchoolIDs)
+}
+
+func emitServeStatus(cmd *cobra.Command, event serveEvent) error {
+	if isMachineOutput() {
+		return writeStreamEvent(cmd.OutOrStdout(), event)
+	}
+	return renderServeStatus(cmd.OutOrStdout(), event)
+}
+
+func renderServeStatus(w io.Writer, event serveEvent) error {
+	switch event.Type {
+	case "starting":
+		_, err := fmt.Fprintf(w, "Starting Moodle API server on %s\n", event.Addr)
+		return err
+	case "ready":
+		if _, err := fmt.Fprintf(w, "Moodle API server ready on %s\n", event.Addr); err != nil {
+			return err
+		}
+		if strings.TrimSpace(event.Docs) != "" {
+			_, err := fmt.Fprintf(w, "API docs: %s\n", event.Docs)
+			return err
+		}
+		return nil
+	case "shutdown":
+		_, err := fmt.Fprintf(w, "Received %s, shutting down...\n", event.Signal)
+		return err
+	case "fatal":
+		_, err := fmt.Fprintf(w, "Server failed: %s\n", event.Error)
+		return err
+	default:
+		return nil
+	}
+}
+
+func serveDocsURL(addr string) string {
+	host, port, err := net.SplitHostPort(strings.TrimSpace(addr))
+	if err != nil {
+		return ""
+	}
+	host = strings.Trim(strings.TrimSpace(host), "[]")
+	switch host {
+	case "", "0.0.0.0", "::":
+		host = "127.0.0.1"
+	}
+	return "http://" + net.JoinHostPort(host, port) + "/docs"
 }

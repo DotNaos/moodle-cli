@@ -2,16 +2,24 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
 )
 
-var navJSON bool
 var navOpen bool
 var navPrint bool
 var navWorkspace string
 var navAt string
+
+type navActionResult struct {
+	Path   string     `json:"path" yaml:"path"`
+	Action string     `json:"action" yaml:"action"`
+	Node   navSummary `json:"node" yaml:"node"`
+	Target string     `json:"target,omitempty" yaml:"target,omitempty"`
+	Text   string     `json:"text,omitempty" yaml:"text,omitempty"`
+}
 
 var navCmd = &cobra.Command{
 	Use:   "nav <path>",
@@ -37,49 +45,76 @@ var navCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		summary, err := service.Summary(path, node)
+		if err != nil {
+			return err
+		}
 		if navOpen {
-			return service.Open(node)
+			target, err := service.Open(node)
+			if err != nil {
+				return err
+			}
+			result := navActionResult{
+				Path:   path,
+				Action: "open",
+				Node:   summary,
+				Target: target,
+			}
+			return writeCommandOutput(cmd, result, func(w io.Writer) error {
+				return nil
+			})
 		}
 		if navPrint {
 			text, err := service.Print(node)
 			if err != nil {
 				return err
 			}
-			fmt.Println(text)
-			return nil
-		}
-		summary, err := service.Summary(path, node)
-		if err != nil {
-			return err
-		}
-		if navJSON {
-			fmt.Println(renderNavSummary(summary))
-			return nil
-		}
-		fmt.Printf("%s (%s)\n", summary.Title, summary.Kind)
-		if summary.Subtitle != "" {
-			fmt.Println(summary.Subtitle)
-		}
-		if summary.Preview != "" {
-			fmt.Println(summary.Preview)
-		}
-		if len(summary.Children) == 0 {
-			return nil
-		}
-		fmt.Println("Children:")
-		for _, child := range summary.Children {
-			line := fmt.Sprintf("%d. %s", child.Index, child.Title)
-			if child.Subtitle != "" {
-				line += " — " + child.Subtitle
+			result := navActionResult{
+				Path:   path,
+				Action: "print",
+				Node:   summary,
+				Text:   text,
 			}
-			fmt.Println(line)
+			return writeCommandOutput(cmd, result, func(w io.Writer) error {
+				_, err := fmt.Fprintln(w, text)
+				return err
+			})
 		}
-		return nil
+		return writeCommandOutput(cmd, summary, func(w io.Writer) error {
+			if _, err := fmt.Fprintf(w, "%s (%s)\n", summary.Title, summary.Kind); err != nil {
+				return err
+			}
+			if summary.Subtitle != "" {
+				if _, err := fmt.Fprintln(w, summary.Subtitle); err != nil {
+					return err
+				}
+			}
+			if summary.Preview != "" {
+				if _, err := fmt.Fprintln(w, summary.Preview); err != nil {
+					return err
+				}
+			}
+			if len(summary.Children) == 0 {
+				return nil
+			}
+			if _, err := fmt.Fprintln(w, "Children:"); err != nil {
+				return err
+			}
+			for _, child := range summary.Children {
+				line := fmt.Sprintf("%d. %s", child.Index, child.Title)
+				if child.Subtitle != "" {
+					line += " — " + child.Subtitle
+				}
+				if _, err := fmt.Fprintln(w, line); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
 	},
 }
 
 func init() {
-	navCmd.Flags().BoolVar(&navJSON, "json", false, "Output JSON")
 	navCmd.Flags().BoolVar(&navOpen, "open", false, "Open the resolved node if possible")
 	navCmd.Flags().BoolVar(&navPrint, "print", false, "Print the resolved node if possible")
 	navCmd.Flags().StringVar(&navWorkspace, "workspace", "", "Optional workspace root for current-course helpers")

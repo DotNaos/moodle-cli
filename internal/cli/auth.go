@@ -23,6 +23,11 @@ type loginInputOverrides struct {
 	Password string
 }
 
+type savedSessionResult struct {
+	Session moodle.Session
+	Path    string
+}
+
 func ensureAuthenticatedClient() (*moodle.Client, error) {
 	_, client, err := ensureValidatedSession(
 		func() (moodle.Session, sessionValidatingClient, error) {
@@ -56,7 +61,8 @@ func ensureServeSession() error {
 		if username == "" || password == "" {
 			return fmt.Errorf("serve login requires username and password. Provide them via flags, environment variables, or saved config")
 		}
-		return loginAndSaveSession(school, username, password)
+		_, err = loginAndSaveSession(school, username, password)
+		return err
 	}
 
 	_, err := ensureAuthenticatedClient()
@@ -117,7 +123,8 @@ func bootstrapSession() error {
 	if username == "" || password == "" {
 		return missingSessionError()
 	}
-	return loginAndSaveSession(school, username, password)
+	_, err = loginAndSaveSession(school, username, password)
+	return err
 }
 
 func autoRelogin(schoolID string) error {
@@ -129,10 +136,11 @@ func autoRelogin(schoolID string) error {
 		return fmt.Errorf("session expired and auto-login requires stored credentials; run 'moodle config set --username <email> --password <password>' or 'moodle login --show-browser'")
 	}
 
-	return loginAndSaveSession(resolvedSchool, username, password)
+	_, err = loginAndSaveSession(resolvedSchool, username, password)
+	return err
 }
 
-func loginAndSaveSession(school string, username string, password string) error {
+func loginAndSaveSession(school string, username string, password string) (savedSessionResult, error) {
 	result, err := loginWithPlaywright(moodle.LoginOptions{
 		SchoolID: school,
 		Username: username,
@@ -141,14 +149,17 @@ func loginAndSaveSession(school string, username string, password string) error 
 		Timeout:  loginTimeout,
 	})
 	if err != nil {
-		return err
+		return savedSessionResult{}, err
 	}
 
 	payload := moodle.Session{SchoolID: result.SchoolID, Cookies: result.Cookies, CreatedAt: time.Now()}
 	if err := moodle.SaveSession(opts.SessionPath, payload); err != nil {
-		return err
+		return savedSessionResult{}, err
 	}
-	return nil
+	return savedSessionResult{
+		Session: payload,
+		Path:    opts.SessionPath,
+	}, nil
 }
 
 func missingSessionError() error {

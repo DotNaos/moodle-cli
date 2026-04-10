@@ -19,7 +19,7 @@ type tuiNavigator interface {
 	Root() navNode
 	Children(navNode) ([]navNode, error)
 	Preview(navNode) string
-	Open(navNode) error
+	Open(navNode) (string, error)
 	Print(navNode) (string, error)
 	Download(navNode, string) (string, error)
 }
@@ -148,6 +148,7 @@ var tuiCmd = &cobra.Command{
 func init() {
 	tuiCmd.Flags().StringVar(&tuiWorkspace, "workspace", "", "Optional workspace root for current-course helpers")
 	tuiCmd.Flags().StringVar(&tuiAt, "at", "", "Override current time for testing (RFC3339)")
+	markInteractiveOnly(tuiCmd)
 }
 
 func runTUI(options selectorOptions) error {
@@ -935,7 +936,8 @@ func (m tuiModel) runAction(action string, target navNode) (tea.Model, tea.Cmd) 
 
 func (m tuiModel) openCmd(node navNode) tea.Cmd {
 	return func() tea.Msg {
-		return tuiOpenMsg{Err: m.nav.Open(node)}
+		_, err := m.nav.Open(node)
+		return tuiOpenMsg{Err: err}
 	}
 }
 

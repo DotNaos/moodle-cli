@@ -3,6 +3,7 @@ package cli
 import (
 	"archive/zip"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,14 @@ import (
 )
 
 var exportOutputDir string
+
+type exportCommandResult struct {
+	Action        string `json:"action" yaml:"action"`
+	CourseID      string `json:"courseId" yaml:"courseId"`
+	CourseName    string `json:"courseName" yaml:"courseName"`
+	ArchivePath   string `json:"archivePath" yaml:"archivePath"`
+	ExportedFiles int    `json:"exportedFiles" yaml:"exportedFiles"`
+}
 
 var exportCmd = &cobra.Command{
 	Use:               "export course <course-id|name|current|0>",
@@ -54,7 +63,20 @@ var exportCmd = &cobra.Command{
 			return err
 		}
 
-		return exportCourseZip(client, resources, zipPath)
+		count, err := exportCourseZip(client, resources, zipPath)
+		if err != nil {
+			return err
+		}
+		result := exportCommandResult{
+			Action:        "export",
+			CourseID:      courseID,
+			CourseName:    courseName,
+			ArchivePath:   zipPath,
+			ExportedFiles: count,
+		}
+		return writeCommandOutput(cmd, result, func(w io.Writer) error {
+			return nil
+		})
 	},
 }
 
@@ -85,18 +107,19 @@ func resolveExportPath(courseName string, outputPath string) (string, error) {
 	return outputPath, nil
 }
 
-func exportCourseZip(client *moodle.Client, resources []moodle.Resource, path string) error {
+func exportCourseZip(client *moodle.Client, resources []moodle.Resource, path string) (int, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
+		return 0, err
 	}
 	file, err := os.Create(path)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer file.Close()
 
 	zipWriter := zip.NewWriter(file)
 	defer zipWriter.Close()
+	count := 0
 
 	for _, res := range resources {
 		if res.Type != "resource" {
@@ -104,7 +127,7 @@ func exportCourseZip(client *moodle.Client, resources []moodle.Resource, path st
 		}
 		result, err := client.DownloadFileToBuffer(res.URL)
 		if err != nil {
-			return err
+			return 0, err
 		}
 
 		section := res.SectionName
@@ -116,11 +139,12 @@ func exportCourseZip(client *moodle.Client, resources []moodle.Resource, path st
 
 		entry, err := zipWriter.Create(entryName)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		if _, err := entry.Write(result.Data); err != nil {
-			return err
+			return 0, err
 		}
+		count++
 	}
-	return nil
+	return count, nil
 }
