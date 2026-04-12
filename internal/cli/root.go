@@ -31,6 +31,7 @@ var rootCmd = &cobra.Command{
 		if err := ensureMachineOutputAllowed(cmd); err != nil {
 			return err
 		}
+		recordCommandInvocation(cmd)
 		return maybeCheckForUpdates(cmd)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -69,6 +70,8 @@ func init() {
 		exportCmd,
 		printCmd,
 		tuiCmd,
+		skillCmd,
+		logsCmd,
 		versionCmd,
 		updateCmd,
 		serveCmd,
@@ -77,6 +80,7 @@ func init() {
 
 func Execute() error {
 	err := rootCmd.Execute()
+	logCommandResult(err)
 	if err != nil {
 		writeCommandError(err)
 	}

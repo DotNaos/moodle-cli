@@ -2,6 +2,7 @@ package cli
 
 import (
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,5 +52,47 @@ func TestLogUnexpectedWritesSeparateErrorLog(t *testing.T) {
 	text := string(content)
 	if !strings.Contains(text, "scope: open") || !strings.Contains(text, "target: /tmp/file.pdf") {
 		t.Fatalf("expected error log content, got %q", text)
+	}
+}
+
+func TestRedactSensitiveArgsHidesPasswords(t *testing.T) {
+	args := []string{"login", "--username=user@example.com", "--password", "secret", "--password=another", "--other=ok"}
+	got := redactSensitiveArgs(args)
+	want := []string{"login", "--username=user@example.com", "--password", "<redacted>", "--password=<redacted>", "--other=ok"}
+	if len(got) != len(want) {
+		t.Fatalf("unexpected args length: %#v", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("arg %d mismatch: got %q want %q (full: %#v)", i, got[i], want[i], got)
+		}
+	}
+}
+
+func TestTailStartOffsetReadsTrailingLines(t *testing.T) {
+	tempDir := t.TempDir()
+	path := filepath.Join(tempDir, "cli.log")
+	if err := os.WriteFile(path, []byte("one\ntwo\nthree\n"), 0o644); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("open log: %v", err)
+	}
+	t.Cleanup(func() { file.Close() })
+
+	offset, err := tailStartOffset(file, 2)
+	if err != nil {
+		t.Fatalf("tailStartOffset: %v", err)
+	}
+	if _, err := file.Seek(offset, io.SeekStart); err != nil {
+		t.Fatalf("seek: %v", err)
+	}
+	data, err := io.ReadAll(file)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if string(data) != "two\nthree\n" {
+		t.Fatalf("unexpected tail content: %q", string(data))
 	}
 }

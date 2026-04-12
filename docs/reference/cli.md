@@ -8,6 +8,8 @@ Use this page when you want the exact command for a common task.
 - `moodle login` creates or refreshes the saved session.
 - `moodle serve --addr :8080` starts the local JSON API and serves the built-in Scalar reference at `/docs`.
 - `moodle update` installs the latest stable release.
+- `moodle skill` prints the bundled agent skill (use `--install` to install it to codex/opencode/claude-code/gemini-cli).
+- `moodle logs` tails the CLI logs (`--error` for error log, `--lines` to change the tail size, `--follow=false` to exit after printing).
 
 ## List data
 

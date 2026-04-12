@@ -9,6 +9,8 @@ Use this page when you want the exact files and environment variables used by th
 - SQLite cache: `~/.moodle-cli/cache.db`
 - File cache: `~/.moodle-cli/files/`
 - CLI state: `~/.moodle-cli/state.json`
+- Debug log: `~/.moodle-cli/cli.log`
+- Error log: `~/.moodle-cli/error.log`
 - Output: `~/Downloads/moodle/`
 
 ## Environment variables
