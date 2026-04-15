@@ -27,16 +27,16 @@ type printCommandResult struct {
 var printCmd = &cobra.Command{
 	Use:              "print [course] [resource]",
 	Short:            "Print Moodle content to stdout",
-	Long:             "Print Moodle content to stdout.\n\nUse either the existing subcommands or direct selectors such as `moodle print current current`.",
+	Long:             "Print Moodle content to stdout.\n\nUse a single course selector such as `moodle print 12345` or `moodle print 0` to print the course outline, or two selectors such as `moodle print current current` to print a file.",
 	TraverseChildren: true,
-	Example:          "  moodle print current current\n  moodle print current-course\n  moodle print current-resource\n  moodle print 0 0\n  moodle print course 12345 67890",
+	Example:          "  moodle print 12345\n  moodle print 0\n  moodle print current current\n  moodle print current-course\n  moodle print current-resource\n  moodle print 0 0\n  moodle print course 12345 67890\n  moodle print course-page 12345\n  moodle print course-page current",
 	Args: func(cmd *cobra.Command, args []string) error {
 		args = expandSingleCurrentAlias(args)
 		if len(args) == 0 {
 			return nil
 		}
-		if len(args) != 2 {
-			return fmt.Errorf("expected either a subcommand or exactly 2 arguments: <course> <resource>")
+		if len(args) > 2 {
+			return fmt.Errorf("expected either a subcommand, 1 argument <course>, or 2 arguments <course> <resource>")
 		}
 		return nil
 	},
@@ -44,9 +44,17 @@ var printCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		args = expandSingleCurrentAlias(args)
 		if len(args) == 0 {
-			return helpOrMachineError(cmd, "expected either a subcommand or exactly 2 arguments: <course> <resource>")
+			return helpOrMachineError(cmd, "expected either a subcommand, 1 argument <course>, or 2 arguments <course> <resource>")
 		}
-		result, err := runPrintSelection(args[0], args[1])
+		var (
+			result printCommandResult
+			err    error
+		)
+		if len(args) == 1 {
+			result, err = runPrintCoursePageSelection(args[0])
+		} else {
+			result, err = runPrintSelection(args[0], args[1])
+		}
 		if err != nil {
 			return err
 		}
@@ -66,6 +74,25 @@ var printCourseCmd = &cobra.Command{
 	ValidArgsFunction: completePrintCourseFile,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		result, err := runPrintSelection(args[0], args[1])
+		if err != nil {
+			return err
+		}
+		return writeCommandOutput(cmd, result, func(w io.Writer) error {
+			_, err := fmt.Fprintln(w, result.Text)
+			return err
+		})
+	},
+}
+
+var printCoursePageCmd = &cobra.Command{
+	Use:               "course-page <course-id|name|current|0>",
+	Short:             "Print the course outline to stdout",
+	Long:              "Print the course page as a reader-friendly outline.\n\nThe course can be specified by ID, name, `current`, `0`, or a positive index.",
+	Example:           "  moodle print course-page 12345\n  moodle print course-page current\n  moodle print 12345\n  moodle print 0",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeCourseIDs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		result, err := runPrintCoursePageSelection(args[0])
 		if err != nil {
 			return err
 		}
@@ -142,8 +169,33 @@ func init() {
 	printCurrentLectureCmd.Flags().StringVar(&printCurrentLectureAt, "at", "", "Override current time for testing (RFC3339)")
 	printCmd.AddCommand(
 		printCourseCmd,
+		printCoursePageCmd,
 		printCurrentLectureCmd,
 	)
+}
+
+func runPrintCoursePageSelection(courseArg string) (printCommandResult, error) {
+	client, err := ensureAuthenticatedClient()
+	if err != nil {
+		return printCommandResult{}, err
+	}
+	return runPrintCoursePageWithClient(client, courseArg)
+}
+
+func runPrintCoursePageWithClient(client *moodle.Client, courseArg string) (printCommandResult, error) {
+	courseID, err := resolveCourseIDWithOptions(client, courseArg, selectorOptions{})
+	if err != nil {
+		return printCommandResult{}, err
+	}
+	text, err := client.FetchCoursePageReader(courseID)
+	if err != nil {
+		return printCommandResult{}, err
+	}
+	return printCommandResult{
+		Action:   "print-course-page",
+		CourseID: courseID,
+		Text:     text,
+	}, nil
 }
 
 func runPrintSelection(courseArg string, resourceArg string) (printCommandResult, error) {

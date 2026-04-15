@@ -35,6 +35,7 @@ moodle open resource <course-id|name|current|0> <resource-id|name|current|0>
 ## Print course content
 
 ```sh
+moodle print <course-id|name|index|0>
 moodle print course-page <course-id|name|current|0>
 ```
 
