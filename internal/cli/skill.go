@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -87,7 +88,7 @@ func init() {
 }
 
 func readEmbeddedSkill() (string, error) {
-	data, err := skills.FS.ReadFile(filepath.Join(skills.RootDir, "SKILL.md"))
+	data, err := skills.FS.ReadFile(path.Join(skills.RootDir, "SKILL.md"))
 	if err != nil {
 		return "", fmt.Errorf("embedded skill missing: %w", err)
 	}
