@@ -2,8 +2,6 @@ package cli
 
 import (
 	"errors"
-	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -45,13 +43,25 @@ func TestLogUnexpectedWritesSeparateErrorLog(t *testing.T) {
 	if logPath != filepath.Join(filepath.Dir(opts.StatePath), "error.log") {
 		t.Fatalf("unexpected error log path %q", logPath)
 	}
-	content, err := os.ReadFile(logPath)
+	records, err := readLogRecords(logPath, "error")
 	if err != nil {
-		t.Fatalf("expected error log to be written: %v", err)
+		t.Fatalf("expected error log to be readable: %v", err)
 	}
-	text := string(content)
-	if !strings.Contains(text, "scope: open") || !strings.Contains(text, "target: /tmp/file.pdf") {
-		t.Fatalf("expected error log content, got %q", text)
+	if len(records) != 1 {
+		t.Fatalf("expected one error record, got %#v", records)
+	}
+	if records[0].Scope != "open" {
+		t.Fatalf("unexpected record scope: %#v", records[0])
+	}
+	foundTarget := false
+	for _, field := range records[0].Fields {
+		if field.Key == "target" && field.Value == "/tmp/file.pdf" {
+			foundTarget = true
+			break
+		}
+	}
+	if !foundTarget {
+		t.Fatalf("expected target field in error record, got %#v", records[0].Fields)
 	}
 }
 
@@ -69,30 +79,26 @@ func TestRedactSensitiveArgsHidesPasswords(t *testing.T) {
 	}
 }
 
-func TestTailStartOffsetReadsTrailingLines(t *testing.T) {
-	tempDir := t.TempDir()
-	path := filepath.Join(tempDir, "cli.log")
-	if err := os.WriteFile(path, []byte("one\ntwo\nthree\n"), 0o644); err != nil {
-		t.Fatalf("write log: %v", err)
-	}
-	file, err := os.Open(path)
-	if err != nil {
-		t.Fatalf("open log: %v", err)
-	}
-	t.Cleanup(func() { file.Close() })
+func TestAppendDebugLogWritesStructuredRecord(t *testing.T) {
+	originalStatePath := opts.StatePath
+	opts.StatePath = filepath.Join(t.TempDir(), "state.json")
+	t.Cleanup(func() {
+		opts.StatePath = originalStatePath
+	})
 
-	offset, err := tailStartOffset(file, 2)
+	logPath, err := appendDebugLog("cli", "event: start", "command: moodle version")
 	if err != nil {
-		t.Fatalf("tailStartOffset: %v", err)
+		t.Fatalf("appendDebugLog: %v", err)
 	}
-	if _, err := file.Seek(offset, io.SeekStart); err != nil {
-		t.Fatalf("seek: %v", err)
-	}
-	data, err := io.ReadAll(file)
+
+	records, err := readLogRecords(logPath, "debug")
 	if err != nil {
-		t.Fatalf("read: %v", err)
+		t.Fatalf("read log records: %v", err)
 	}
-	if string(data) != "two\nthree\n" {
-		t.Fatalf("unexpected tail content: %q", string(data))
+	if len(records) != 1 {
+		t.Fatalf("expected one log record, got %#v", records)
+	}
+	if records[0].Level != "debug" || records[0].Scope != "cli" {
+		t.Fatalf("unexpected record: %#v", records[0])
 	}
 }

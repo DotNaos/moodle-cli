@@ -2,7 +2,6 @@ package cli
 
 import (
 	"errors"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -48,11 +47,24 @@ func TestOpenURLReturnsDetailedErrorAndWritesLog(t *testing.T) {
 		t.Fatalf("expected detailed stderr in error, got %q", err.Error())
 	}
 	logPath := filepath.Join(tempDir, "cli.log")
-	content, readErr := os.ReadFile(logPath)
+	records, readErr := readLogRecords(logPath, "debug")
 	if readErr != nil {
 		t.Fatalf("expected open log to be written: %v", readErr)
 	}
-	if !strings.Contains(string(content), "/tmp/example.pdf") || !strings.Contains(string(content), "scope: open") {
-		t.Fatalf("expected log to contain target path, got %q", string(content))
+	if len(records) == 0 {
+		t.Fatalf("expected at least one log record")
+	}
+	if records[0].Scope != "open" {
+		t.Fatalf("unexpected log scope: %#v", records[0])
+	}
+	foundTarget := false
+	for _, field := range records[0].Fields {
+		if field.Key == "target" && field.Value == "/tmp/example.pdf" {
+			foundTarget = true
+			break
+		}
+	}
+	if !foundTarget {
+		t.Fatalf("expected log to contain target path, got %#v", records[0].Fields)
 	}
 }

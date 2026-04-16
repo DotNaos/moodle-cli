@@ -21,34 +21,16 @@ func errorLogPath() string {
 
 func appendDebugLog(scope string, lines ...string) (string, error) {
 	logPath := debugLogPath()
-	return appendLogFile(logPath, scope, lines...)
+	return appendLogFile(logPath, "debug", scope, lines...)
 }
 
 func appendErrorLog(scope string, lines ...string) (string, error) {
 	logPath := errorLogPath()
-	return appendLogFile(logPath, scope, lines...)
+	return appendLogFile(logPath, "error", scope, lines...)
 }
 
-func appendLogFile(logPath string, scope string, lines ...string) (string, error) {
-	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
-		return "", err
-	}
-	entry := []string{
-		"---",
-		"time: " + time.Now().Format(time.RFC3339),
-		"scope: " + scope,
-	}
-	entry = append(entry, lines...)
-	entry = append(entry, "")
-	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-	if _, err := file.WriteString(strings.Join(entry, "\n")); err != nil {
-		return "", err
-	}
-	return logPath, nil
+func appendLogFile(logPath string, level string, scope string, lines ...string) (string, error) {
+	return appendLogRecord(logPath, newLogRecord(level, scope, lines))
 }
 
 func logDebug(scope string, lines ...string) string {
