@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/spf13/cobra"
 )
 
 func debugLogPath() string {
@@ -156,5 +158,88 @@ func joinErrors(left error, right error) error {
 		return left
 	default:
 		return errors.Join(left, right)
+	}
+}
+
+var (
+	currentCommandPath  string
+	currentCommandArgs  []string
+	currentCommandStart time.Time
+)
+
+func recordCommandInvocation(cmd *cobra.Command) {
+	currentCommandPath = cmd.CommandPath()
+	currentCommandArgs = redactSensitiveArgs(os.Args[1:])
+	currentCommandStart = time.Now()
+
+	lines := []string{
+		"event: start",
+		"command: " + currentCommandPath,
+	}
+	if len(currentCommandArgs) > 0 {
+		lines = append(lines, "args: "+strings.Join(currentCommandArgs, " "))
+	}
+	lines = append(lines, "output: "+string(currentOutputFormat()))
+	logDebug("cli", lines...)
+}
+
+func logCommandResult(err error) {
+	if currentCommandPath == "" || currentCommandStart.IsZero() {
+		return
+	}
+
+	lines := []string{
+		"event: finish",
+		"command: " + currentCommandPath,
+		"duration: " + time.Since(currentCommandStart).Round(time.Millisecond).String(),
+	}
+	if len(currentCommandArgs) > 0 {
+		lines = append(lines, "args: "+strings.Join(currentCommandArgs, " "))
+	}
+
+	if err != nil {
+		lines = append(lines, "status: error", "error: "+strings.TrimSpace(err.Error()))
+		_, _ = appendDebugLog("cli", lines...)
+		_, _ = appendErrorLog("cli", lines...)
+		return
+	}
+
+	lines = append(lines, "status: ok")
+	_, _ = appendDebugLog("cli", lines...)
+}
+
+func redactSensitiveArgs(args []string) []string {
+	out := make([]string, 0, len(args))
+	redactNext := false
+	for _, arg := range args {
+		if redactNext {
+			out = append(out, "<redacted>")
+			redactNext = false
+			continue
+		}
+
+		name, _, hasValue := strings.Cut(arg, "=")
+		if isSensitiveFlag(name) {
+			if hasValue {
+				out = append(out, name+"=<redacted>")
+			} else {
+				out = append(out, name)
+				redactNext = true
+			}
+			continue
+		}
+
+		out = append(out, arg)
+	}
+	return out
+}
+
+func isSensitiveFlag(name string) bool {
+	clean := strings.TrimLeft(name, "-")
+	switch clean {
+	case "password":
+		return true
+	default:
+		return false
 	}
 }

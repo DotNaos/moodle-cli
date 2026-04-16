@@ -1,14 +1,17 @@
 # Moodle CLI reference
 
-Repo: `/Users/oli/projects/active/moodle-cli`
+Use these commands when you need quick reminders or output paths.
 
-## Goals / planned commands
+## Handy commands
 - `moodle login`
-- `moodle courses --json`
-- `moodle files <course-id> --json`
-- `moodle timetable --json` (lectures only; no exam deadlines)
-- `moodle download course <id> --zip|--files`
-- `moodle export course <id> --format=folder|zip`
+- `moodle list courses --json`
+- `moodle list files <course-id> --json`
+- `moodle list timetable --json` (lectures only; no exam deadlines)
+- `moodle download file <course-id> --all --output-dir <path>`
+- `moodle export course <course-id> --output-dir <path>`
+- `moodle skill` (print the bundled skill text)
+- `moodle skill --install` (install skill to codex/opencode/claude-code/gemini-cli)
+- `moodle logs` (tail debug log; use `--error` for error log)
 
 ## Data locations (defaults)
 - Config: `~/.moodle-cli/config.json`
@@ -16,6 +19,8 @@ Repo: `/Users/oli/projects/active/moodle-cli`
 - SQLite cache: `~/.moodle-cli/cache.db`
 - File cache: `~/.moodle-cli/files/`
 - Export: `~/Downloads/moodle/`
+- Debug log: `~/.moodle-cli/cli.log`
+- Error log: `~/.moodle-cli/error.log`
 
 ## Notes
 - Project status: scaffold in progress (see README).

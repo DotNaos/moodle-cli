@@ -55,6 +55,19 @@ func TestAPIRouteCountMatchesMachineCommandCount(t *testing.T) {
 	}
 }
 
+func TestLogsRouteUsesStreamingAPI(t *testing.T) {
+	for _, route := range buildAPICommandRoutes() {
+		if strings.Join(route.CommandPath, " ") != "logs" {
+			continue
+		}
+		if !route.Stream {
+			t.Fatalf("expected logs route to be marked as streaming: %#v", route)
+		}
+		return
+	}
+	t.Fatal("logs route not found")
+}
+
 func commandNamePath(cmd *cobra.Command) []string {
 	names := []string{}
 	for current := cmd; current != nil && current != rootCmd; current = current.Parent() {

@@ -14,6 +14,7 @@ Use the local Moodle CLI to login, list courses, files, and export/download cour
 1. Read `README.md` for current capabilities and status.
 2. Run the CLI as `moodle` (installed on PATH; use `source ~/.zshrc` first if needed).
 3. Prefer JSON outputs (`--json`) when available and parse results for the user.
+4. View the built-in skill text with `moodle skill`, or install it for common agents with `moodle skill --install` (targets codex, VS Code/opencode, Claude Code, and Gemini by default).
 
 ## Core Tasks
 
@@ -55,6 +56,14 @@ Use the local Moodle CLI to login, list courses, files, and export/download cour
     - `moodle download file <course-id|name> <resource-id|name> --output-dir <path>`
     - `moodle download file <course-id|name> --all --output-dir <path>`
     - `moodle export course <course-id|name> --output-dir <path>`
+
+### View CLI logs
+
+- Use when you need to see what the CLI is doing or to debug unexpected errors.
+- Commands:
+    - `moodle logs` (tails debug log; follows by default)
+    - `moodle logs --error` (tails error log)
+- Flags: `--lines <n>` to control the initial tail size, `--follow=false` to print once and exit.
 
 ## Resources
 
