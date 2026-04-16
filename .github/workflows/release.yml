@@ -302,7 +302,9 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "${app_path}"
 
       - name: Notarize app bundle
+        id: notarize_app
         if: env.MACOS_APPLICATION_SIGNING_IDENTITY != '' && env.MACOS_NOTARY_APPLE_ID != '' && env.MACOS_NOTARY_TEAM_ID != '' && env.MACOS_NOTARY_PASSWORD != ''
+        continue-on-error: true
         run: |
           app_path="dist/installers/moodle-cli.app"
           zip_path="dist/installers/moodle_darwin_${{ matrix.arch }}.zip"
@@ -314,6 +316,11 @@ jobs:
             --wait
           xcrun stapler staple "${app_path}"
 
+      - name: Warn when app notarization fails
+        if: steps.notarize_app.outcome == 'failure'
+        run: |
+          echo "::warning::App notarization failed for macOS ${{ matrix.arch }}. Continuing with a signed but unstapled app bundle and DMG."
+
       - name: Build DMG installer
         run: |
           mkdir -p dist/installers
@@ -323,7 +330,9 @@ jobs:
             --output "dist/installers/moodle_darwin_${{ matrix.arch }}.dmg"
 
       - name: Notarize DMG installer
-        if: env.MACOS_APPLICATION_SIGNING_IDENTITY != '' && env.MACOS_NOTARY_APPLE_ID != '' && env.MACOS_NOTARY_TEAM_ID != '' && env.MACOS_NOTARY_PASSWORD != ''
+        id: notarize_dmg
+        if: env.MACOS_APPLICATION_SIGNING_IDENTITY != '' && env.MACOS_NOTARY_APPLE_ID != '' && env.MACOS_NOTARY_TEAM_ID != '' && env.MACOS_NOTARY_PASSWORD != '' && steps.notarize_app.outcome != 'failure'
+        continue-on-error: true
         run: |
           dmg_path="dist/installers/moodle_darwin_${{ matrix.arch }}.dmg"
           xcrun notarytool submit "${dmg_path}" \
@@ -332,6 +341,11 @@ jobs:
             --password "${MACOS_NOTARY_PASSWORD}" \
             --wait
           xcrun stapler staple "${dmg_path}"
+
+      - name: Warn when DMG notarization fails
+        if: steps.notarize_dmg.outcome == 'failure'
+        run: |
+          echo "::warning::DMG notarization failed for macOS ${{ matrix.arch }}. Uploading the signed DMG without stapling."
 
       - name: Upload DMG installer
         env:
