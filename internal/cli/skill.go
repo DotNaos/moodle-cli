@@ -21,6 +21,8 @@ var (
 	skillInstallAgents []string
 )
 
+var skillInstallCommand = exec.CommandContext
+
 type skillCommandResult struct {
 	Skill     string                `json:"skill" yaml:"skill"`
 	Installed *skillInstallResponse `json:"installed,omitempty" yaml:"installed,omitempty"`
@@ -53,7 +55,7 @@ var skillCmd = &cobra.Command{
 			if len(skillInstallAgents) > 0 {
 				agents = skillInstallAgents
 			}
-			installResult, err := installEmbeddedSkill(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), agents)
+			installResult, err := installEmbeddedSkill(cmd.Context(), cmd.ErrOrStderr(), cmd.ErrOrStderr(), agents)
 			if err != nil {
 				return err
 			}
@@ -120,7 +122,7 @@ func installEmbeddedSkill(ctx context.Context, stdout io.Writer, stderr io.Write
 		args = append(args, "-a", agent)
 	}
 
-	cmd := exec.CommandContext(ctx, "npx", args...)
+	cmd := skillInstallCommand(ctx, "npx", args...)
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	if err := cmd.Run(); err != nil {

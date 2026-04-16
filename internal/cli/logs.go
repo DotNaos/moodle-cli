@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -29,10 +30,6 @@ var logsCmd = &cobra.Command{
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if isMachineOutput() {
-			return machineCommandError("logs_text_only", "logs command emits plain text; omit --json/--yaml")
-		}
-
 		logPath := debugLogPath()
 		label := "debug"
 		if logsErrors {
@@ -42,6 +39,10 @@ var logsCmd = &cobra.Command{
 
 		if err := ensureLogFilePresent(logPath); err != nil {
 			return err
+		}
+
+		if isMachineOutput() {
+			return streamLogs(cmd, logPath, label, logsLines, logsFollow)
 		}
 
 		header := "Tailing"
@@ -145,6 +146,80 @@ func tailLogFile(ctx context.Context, path string, lines int, follow bool, out i
 			}
 		}
 	}
+}
+
+type logsEvent struct {
+	Type   string `json:"type" yaml:"type"`
+	Label  string `json:"label,omitempty" yaml:"label,omitempty"`
+	Path   string `json:"path,omitempty" yaml:"path,omitempty"`
+	Follow bool   `json:"follow,omitempty" yaml:"follow,omitempty"`
+	Line   string `json:"line,omitempty" yaml:"line,omitempty"`
+}
+
+func streamLogs(cmd *cobra.Command, logPath string, label string, lines int, follow bool) error {
+	if err := writeStreamEvent(cmd.OutOrStdout(), logsEvent{
+		Type:   "meta",
+		Label:  label,
+		Path:   logPath,
+		Follow: follow,
+	}); err != nil {
+		return err
+	}
+
+	writer := &logEventWriter{
+		emit: func(line string) error {
+			return writeStreamEvent(cmd.OutOrStdout(), logsEvent{
+				Type:  "line",
+				Label: label,
+				Path:  logPath,
+				Line:  line,
+			})
+		},
+	}
+
+	err := tailLogFile(cmd.Context(), logPath, lines, follow, writer)
+	if err != nil && !errors.Is(err, context.Canceled) {
+		return err
+	}
+	if !follow {
+		if err := writer.Flush(); err != nil {
+			return err
+		}
+	}
+	if errors.Is(err, context.Canceled) {
+		return nil
+	}
+	return err
+}
+
+type logEventWriter struct {
+	pending string
+	emit    func(string) error
+}
+
+func (w *logEventWriter) Write(p []byte) (int, error) {
+	w.pending += string(p)
+	for {
+		index := strings.IndexByte(w.pending, '\n')
+		if index < 0 {
+			break
+		}
+		line := w.pending[:index]
+		if err := w.emit(line); err != nil {
+			return 0, err
+		}
+		w.pending = w.pending[index+1:]
+	}
+	return len(p), nil
+}
+
+func (w *logEventWriter) Flush() error {
+	if w.pending == "" {
+		return nil
+	}
+	line := w.pending
+	w.pending = ""
+	return w.emit(line)
 }
 
 func tailStartOffset(file *os.File, lines int) (int64, error) {

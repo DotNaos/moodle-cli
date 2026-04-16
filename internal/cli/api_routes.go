@@ -49,7 +49,7 @@ func shouldExposeCommandAsAPI(cmd *cobra.Command) bool {
 }
 
 func isStreamingAPICommandPath(commandPath []string) bool {
-	return len(commandPath) == 1 && strings.EqualFold(commandPath[0], "serve")
+	return len(commandPath) == 1 && (strings.EqualFold(commandPath[0], "serve") || strings.EqualFold(commandPath[0], "logs"))
 }
 
 func commandSummary(cmd *cobra.Command) string {
