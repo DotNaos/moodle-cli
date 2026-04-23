@@ -63,6 +63,7 @@ func init() {
 		completionCmd,
 		configCmd,
 		loginCmd,
+		mobileCmd,
 		listCmd,
 		navCmd,
 		openCmd,
