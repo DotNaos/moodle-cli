@@ -3,6 +3,7 @@ package moodle
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -23,7 +24,7 @@ func TestSaveMobileSessionUsesPrivatePermissions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat mobile session: %v", err)
 	}
-	if got := info.Mode().Perm(); got != 0o600 {
+	if got := info.Mode().Perm(); runtime.GOOS != "windows" && got != 0o600 {
 		t.Fatalf("expected 0600 permissions, got %o", got)
 	}
 
