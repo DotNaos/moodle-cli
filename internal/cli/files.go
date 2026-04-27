@@ -15,12 +15,12 @@ var filesCmd = &cobra.Command{
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: completeCourseIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client, err := ensureAuthenticatedClient()
+		client, err := ensureCourseDataClient()
 		if err != nil {
 			return err
 		}
 
-		courseID, err := resolveCourseIDWithOptions(client, args[0], selectorOptions{})
+		courseID, err := resolveCourseIDForCourseData(client, args[0], selectorOptions{})
 		if err != nil {
 			return err
 		}

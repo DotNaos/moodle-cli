@@ -10,15 +10,15 @@ Use the same mounted folder in both runs:
 
 ```sh
 docker run --rm \
-  -v ${HOME}/.moodle-cli:/data \
-  -e MOODLE_CLI_HOME=/data \
+  -v ${HOME}/.moodle:/data \
+  -e MOODLE_HOME=/data \
   ghcr.io/dotnaos/moodle-cli:latest login \
   --username "$MOODLE_USERNAME" \
   --password "$MOODLE_PASSWORD"
 
 docker run --rm -p 8080:8080 \
-  -v ${HOME}/.moodle-cli:/data \
-  -e MOODLE_CLI_HOME=/data \
+  -v ${HOME}/.moodle:/data \
+  -e MOODLE_HOME=/data \
   ghcr.io/dotnaos/moodle-cli:latest serve --addr :8080
 ```
 

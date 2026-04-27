@@ -6,6 +6,9 @@ Use this page when you want the exact command for a common task.
 
 - `moodle` opens the interactive view.
 - `moodle login` creates or refreshes the saved session.
+- `moodle mobile qr login` creates and saves a reusable Moodle mobile token.
+- `moodle bootstrap server --copy` creates a one-command Docker server install command and copies it to the clipboard.
+- `moodle config migrate-home` copies old `~/.moodle-cli` data into `~/.moodle` without deleting the old folder.
 - `moodle serve --addr :8080` starts the local JSON API and serves the built-in Scalar reference at `/docs`.
 - `moodle update` installs the latest stable release.
 - `moodle skill` prints the bundled agent skill (use `--install` to install it to codex/opencode/claude-code/gemini-cli).

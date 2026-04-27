@@ -41,7 +41,7 @@ COPY --from=builder /root/.cache/ms-playwright-go /root/.cache/ms-playwright-go
 COPY --from=builder /root/.cache/ms-playwright /root/.cache/ms-playwright
 
 WORKDIR /app
-ENV MOODLE_CLI_HOME=/data
+ENV MOODLE_HOME=/data
 VOLUME ["/data"]
 COPY --from=builder /out/moodle /usr/local/bin/moodle
 EXPOSE 8080

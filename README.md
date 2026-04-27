@@ -50,13 +50,16 @@ curl http://127.0.0.1:8080/api/courses
 
 4. Keep that terminal open while you use the API.
 
-5. If you want a saved Docker session later, continue in [Run the API with Docker and a saved session](docs/guides/run-api-with-docker-saved-session.md).
+5. If you want a one-command server setup, continue in [Bootstrap a server with one command](docs/guides/bootstrap-server.md).
 
-6. If you want the local CLI instead of Docker, continue in [Use the CLI locally](docs/guides/install.md).
+6. If you want a saved Docker session later, continue in [Run the API with Docker and a saved session](docs/guides/run-api-with-docker-saved-session.md).
+
+7. If you want the local CLI instead of Docker, continue in [Use the CLI locally](docs/guides/install.md).
 
 ## Guides
 
 - [Docs index](docs/README.md)
+- [Bootstrap a server with one command](docs/guides/bootstrap-server.md)
 - [Run the API with Docker and a fresh login](docs/guides/run-api-with-docker-throwaway.md)
 - [Run the API with Docker and a saved session](docs/guides/run-api-with-docker-saved-session.md)
 - [Run the API with Docker Compose](docs/guides/run-api-with-docker-compose.md)

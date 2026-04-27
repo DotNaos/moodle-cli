@@ -9,13 +9,14 @@ import (
 )
 
 type Options struct {
-	ConfigPath   string
-	SessionPath  string
-	CacheDBPath  string
-	FileCacheDir string
-	StatePath    string
-	ExportDir    string
-	Unsanitized  bool
+	ConfigPath        string
+	SessionPath       string
+	CacheDBPath       string
+	FileCacheDir      string
+	StatePath         string
+	MobileSessionPath string
+	ExportDir         string
+	Unsanitized       bool
 }
 
 var opts Options
@@ -47,13 +48,14 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&opts.CacheDBPath, "cache", config.CacheDBPath(), "SQLite cache path")
 	rootCmd.PersistentFlags().StringVar(&opts.FileCacheDir, "files-cache", config.FileCacheDir(), "File cache directory")
 	rootCmd.PersistentFlags().StringVar(&opts.StatePath, "state", config.StatePath(), "State file path")
+	rootCmd.PersistentFlags().StringVar(&opts.MobileSessionPath, "mobile-session", config.MobileSessionPath(), "Mobile token session file path")
 	rootCmd.PersistentFlags().StringVar(&opts.ExportDir, "output-dir", config.ExportDir(), "Output directory")
 	rootCmd.PersistentFlags().BoolVar(&outputJSON, "json", false, "Output machine-readable JSON")
 	rootCmd.PersistentFlags().BoolVar(&outputYAML, "yaml", false, "Output machine-readable YAML")
 	rootCmd.PersistentFlags().BoolVar(&outputYML, "yml", false, "Alias for --yaml")
 	rootCmd.PersistentFlags().BoolVar(&opts.Unsanitized, "unsanitized", false, "Preserve raw scraped names instead of sanitized defaults")
 
-	rootCmd.SetHelpTemplate(fmt.Sprintf("%s\n\nDefault paths:\n  config: %s\n  session: %s\n  cache: %s\n  files: %s\n  state: %s\n  output: %s\n", rootCmd.HelpTemplate(), config.ConfigPath(), config.SessionPath(), config.CacheDBPath(), config.FileCacheDir(), config.StatePath(), config.ExportDir()))
+	rootCmd.SetHelpTemplate(fmt.Sprintf("%s\n\nDefault paths:\n  config: %s\n  session: %s\n  mobile session: %s\n  cache: %s\n  files: %s\n  state: %s\n  output: %s\n", rootCmd.HelpTemplate(), config.ConfigPath(), config.SessionPath(), config.MobileSessionPath(), config.CacheDBPath(), config.FileCacheDir(), config.StatePath(), config.ExportDir()))
 	rootCmd.SilenceUsage = true
 	rootCmd.SilenceErrors = true
 	markInteractiveOnly(rootCmd)
@@ -62,6 +64,7 @@ func init() {
 	rootCmd.AddCommand(
 		completionCmd,
 		configCmd,
+		bootstrapCmd,
 		loginCmd,
 		mobileCmd,
 		listCmd,

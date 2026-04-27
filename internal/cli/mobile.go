@@ -24,6 +24,7 @@ type mobileQRLoginResult struct {
 	Status                string                `json:"status" yaml:"status"`
 	SiteURL               string                `json:"siteUrl" yaml:"siteUrl"`
 	UserID                int                   `json:"userId" yaml:"userId"`
+	MobileSessionPath     string                `json:"mobileSessionPath,omitempty" yaml:"mobileSessionPath,omitempty"`
 	QRLoginKeyRedacted    string                `json:"qrLoginKeyRedacted" yaml:"qrLoginKeyRedacted"`
 	TokenReceived         bool                  `json:"tokenReceived" yaml:"tokenReceived"`
 	PrivateTokenReceived  bool                  `json:"privateTokenReceived" yaml:"privateTokenReceived"`
@@ -139,17 +140,23 @@ func runMobileQRLogin(checkAPI bool) (mobileQRLoginResult, error) {
 	if err != nil {
 		return mobileQRLoginResult{}, err
 	}
+	session := moodle.MobileSessionFromToken(token)
+	session.SchoolID = client.School.ID
+	if err := moodle.SaveMobileSession(opts.MobileSessionPath, session); err != nil {
+		return mobileQRLoginResult{}, err
+	}
 
 	result := mobileQRLoginResult{
 		Status:               "created",
 		SiteURL:              token.SiteURL,
 		UserID:               token.UserID,
+		MobileSessionPath:    opts.MobileSessionPath,
 		QRLoginKeyRedacted:   moodle.RedactSecret(token.QRLoginKey),
 		TokenReceived:        token.Token != "",
 		PrivateTokenReceived: token.PrivateToken != "",
 		TokenRedacted:        moodle.RedactSecret(token.Token),
 		PrivateTokenRedacted: moodle.RedactSecret(token.PrivateToken),
-		SafetyNote:           "The real mobile token was only kept in memory for this command and is not printed in full.",
+		SafetyNote:           "The real mobile token was saved locally and is not printed in full. Treat the mobile session file like a password.",
 	}
 
 	if !checkAPI {
@@ -230,6 +237,11 @@ func renderMobileQRLoginText(w io.Writer, result mobileQRLoginResult) error {
 	}
 	if _, err := fmt.Fprintf(w, "user id: %d\n", result.UserID); err != nil {
 		return err
+	}
+	if result.MobileSessionPath != "" {
+		if _, err := fmt.Fprintf(w, "mobile session: %s\n", result.MobileSessionPath); err != nil {
+			return err
+		}
 	}
 	if _, err := fmt.Fprintf(w, "qr login key: %s\n", result.QRLoginKeyRedacted); err != nil {
 		return err
