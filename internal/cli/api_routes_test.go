@@ -24,7 +24,8 @@ func TestEveryMachineCommandHasAPIEndpoint(t *testing.T) {
 			if _, ok := routeSet[key]; !ok {
 				t.Fatalf("command %s is missing an API endpoint", cmd.CommandPath())
 			}
-		} else if isMachineCommandWithoutAPI(cmd) {
+		}
+		if isRunnableAPIOptionalCommand(cmd) {
 			if _, ok := routeSet[key]; ok {
 				t.Fatalf("command %s is explicitly marked as API-optional but still has an API endpoint", cmd.CommandPath())
 			}
@@ -105,7 +106,7 @@ func commandNamePath(cmd *cobra.Command) []string {
 	return names
 }
 
-func isMachineCommandWithoutAPI(cmd *cobra.Command) bool {
+func isRunnableAPIOptionalCommand(cmd *cobra.Command) bool {
 	return cmd != nil &&
 		cmd != rootCmd &&
 		cmd.IsAvailableCommand() &&
