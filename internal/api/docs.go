@@ -165,8 +165,8 @@ func openAPIDocument(r *http.Request, opts ServerOptions) map[string]any {
 							"items": map[string]any{
 								"type": "string",
 							},
-							"description": "Remaining CLI arguments and flags, without the command path itself.",
-							"example":     []string{"current", "--open"},
+							"description": "Remaining CLI arguments and flags. This is only used by internal command-backed routes that explicitly accept a request body.",
+							"example":     []string{"current"},
 						},
 					},
 				},
@@ -298,10 +298,12 @@ func openAPICommandPath(route CommandRoute) map[string]any {
 	if description == "" {
 		description = strings.TrimSpace(route.Summary)
 	}
-	if description != "" {
-		description += "\n\n"
+	if route.CommandPath != nil {
+		if description != "" {
+			description += "\n\n"
+		}
+		description += "Backed by `moodle --json " + strings.Join(route.CommandPath, " ") + "` and returns the command's machine-readable output."
 	}
-	description += "Executes `moodle --json " + strings.Join(route.CommandPath, " ") + "` and returns the command's machine-readable output. Pass remaining CLI flags and positional arguments in `arguments`."
 
 	responses := map[string]any{
 		"200": map[string]any{
@@ -335,22 +337,32 @@ func openAPICommandPath(route CommandRoute) map[string]any {
 		}
 	}
 
-	return map[string]any{
-		"post": map[string]any{
-			"summary":     route.Summary,
-			"description": description,
-			"requestBody": map[string]any{
-				"required": false,
-				"content": map[string]any{
-					"application/json": map[string]any{
-						"schema": map[string]any{
-							"$ref": "#/components/schemas/CommandRequest",
-						},
+	operation := map[string]any{
+		"summary":     route.Summary,
+		"description": description,
+		"responses":   responses,
+	}
+
+	if strings.EqualFold(route.Method, http.MethodPost) {
+		operation["requestBody"] = map[string]any{
+			"required": false,
+			"content": map[string]any{
+				"application/json": map[string]any{
+					"schema": map[string]any{
+						"$ref": "#/components/schemas/CommandRequest",
 					},
 				},
 			},
-			"responses": responses,
-		},
+		}
+	}
+
+	method := strings.ToLower(strings.TrimSpace(route.Method))
+	if method == "" {
+		method = "get"
+	}
+
+	return map[string]any{
+		method: operation,
 	}
 }
 

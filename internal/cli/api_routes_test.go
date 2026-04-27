@@ -1,119 +1,106 @@
 package cli
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/spf13/cobra"
+	"github.com/DotNaos/moodle-cli/internal/api"
+	"github.com/go-chi/chi/v5"
 )
 
-func TestEveryMachineCommandHasAPIEndpoint(t *testing.T) {
+func TestAPICommandRoutesAreCuratedDataEndpoints(t *testing.T) {
 	routes := buildAPICommandRoutes()
-	routeSet := map[string]struct{}{}
+	paths := map[string]api.CommandRoute{}
 	for _, route := range routes {
-		routeSet[strings.Join(route.CommandPath, " ")] = struct{}{}
+		if !strings.HasPrefix(route.APIPath, "/api/") {
+			t.Fatalf("expected API route under /api, got %q", route.APIPath)
+		}
+		if strings.HasPrefix(route.APIPath, "/api/cli/") {
+			t.Fatalf("legacy /api/cli route should not be exposed: %q", route.APIPath)
+		}
+		if route.Method != http.MethodGet {
+			t.Fatalf("expected curated data routes to use GET, got %s for %s", route.Method, route.APIPath)
+		}
+		paths[route.APIPath] = route
 	}
 
-	var walk func(cmd *cobra.Command)
-	walk = func(cmd *cobra.Command) {
-		if cmd == nil || !cmd.IsAvailableCommand() {
-			return
-		}
-		key := strings.Join(commandNamePath(cmd), " ")
-		if shouldExposeCommandAsAPI(cmd) {
-			if _, ok := routeSet[key]; !ok {
-				t.Fatalf("command %s is missing an API endpoint", cmd.CommandPath())
-			}
-		}
-		if isRunnableAPIOptionalCommand(cmd) {
-			if _, ok := routeSet[key]; ok {
-				t.Fatalf("command %s is explicitly marked as API-optional but still has an API endpoint", cmd.CommandPath())
-			}
-		}
-		for _, sub := range cmd.Commands() {
-			walk(sub)
-		}
-	}
-
-	walk(rootCmd)
-}
-
-func TestAPIRouteCountMatchesMachineCommandCount(t *testing.T) {
-	expected := 0
-	var walk func(cmd *cobra.Command)
-	walk = func(cmd *cobra.Command) {
-		if cmd == nil || !cmd.IsAvailableCommand() {
-			return
-		}
-		if shouldExposeCommandAsAPI(cmd) {
-			expected++
-		}
-		for _, sub := range cmd.Commands() {
-			walk(sub)
-		}
-	}
-	walk(rootCmd)
-
-	routes := buildAPICommandRoutes()
-	if len(routes) != expected {
-		t.Fatalf("expected %d API command routes, got %d", expected, len(routes))
-	}
-}
-
-func TestLogsRouteUsesStreamingAPI(t *testing.T) {
-	for _, route := range buildAPICommandRoutes() {
-		if strings.Join(route.CommandPath, " ") != "logs" {
-			continue
-		}
-		if !route.Stream {
-			t.Fatalf("expected logs route to be marked as streaming: %#v", route)
-		}
-		return
-	}
-	t.Fatal("logs route not found")
-}
-
-func TestAPIOptionalCommandsAreExplicitlyExcluded(t *testing.T) {
-	for _, excluded := range []string{
-		"bootstrap",
-		"bootstrap apply",
-		"bootstrap server",
-		"completion",
-		"completion bash",
-		"completion fish",
-		"completion powershell",
-		"completion zsh",
-		"serve",
+	for _, expected := range []string{
+		"/api/version",
+		"/api/timetable",
+		"/api/current-lecture",
+		"/api/nav",
+		"/api/courses/{courseID}/page",
+		"/api/courses/{courseID}/resources/{resourceID}/text",
+		"/api/mobile/qr/inspect",
 	} {
-		cmd, _, err := rootCmd.Find(strings.Split(excluded, " "))
-		if err != nil {
-			t.Fatalf("find %q: %v", excluded, err)
-		}
-		if cmd == nil {
-			t.Fatalf("command %q not found", excluded)
-		}
-		if !isAPIOptional(cmd) {
-			t.Fatalf("expected %q to be explicitly marked API-optional", excluded)
-		}
-		if shouldExposeCommandAsAPI(cmd) {
-			t.Fatalf("expected %q to stay out of generated API routes", excluded)
+		if _, ok := paths[expected]; !ok {
+			t.Fatalf("expected curated API route %s, got %#v", expected, paths)
 		}
 	}
 }
 
-func commandNamePath(cmd *cobra.Command) []string {
-	names := []string{}
-	for current := cmd; current != nil && current != rootCmd; current = current.Parent() {
-		names = append([]string{current.Name()}, names...)
+func TestAPICommandRoutesExcludeSideEffectCommands(t *testing.T) {
+	for _, route := range buildAPICommandRoutes() {
+		command := strings.Join(route.CommandPath, " ")
+		for _, excluded := range []string{
+			"open",
+			"download",
+			"export",
+			"login",
+			"serve",
+			"completion",
+			"bootstrap",
+			"skill",
+			"update",
+			"config set",
+			"logs",
+		} {
+			if command == excluded || strings.HasPrefix(command, excluded+" ") {
+				t.Fatalf("side-effect command %q should not be exposed as API route %s", command, route.APIPath)
+			}
+		}
 	}
-	return names
 }
 
-func isRunnableAPIOptionalCommand(cmd *cobra.Command) bool {
-	return cmd != nil &&
-		cmd != rootCmd &&
-		cmd.IsAvailableCommand() &&
-		!isInteractiveOnly(cmd) &&
-		isAPIOptional(cmd) &&
-		(cmd.RunE != nil || cmd.Run != nil)
+func TestCourseResourceTextRouteBuildsCommandArguments(t *testing.T) {
+	route := findAPICommandRoute(t, "/api/courses/{courseID}/resources/{resourceID}/text")
+	req := httptest.NewRequest(http.MethodGet, "/api/courses/123/resources/456/text?raw=true", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("courseID", "123")
+	rctx.URLParams.Add("resourceID", "456")
+	req = req.WithContext(contextWithRoute(req, rctx))
+
+	args, err := route.Arguments(req, api.CommandRequest{})
+	if err != nil {
+		t.Fatalf("Arguments: %v", err)
+	}
+	if got, want := strings.Join(args, " "), "123 456 --raw"; got != want {
+		t.Fatalf("arguments = %q, want %q", got, want)
+	}
+}
+
+func TestNavRouteRequiresPathQuery(t *testing.T) {
+	route := findAPICommandRoute(t, "/api/nav")
+	req := httptest.NewRequest(http.MethodGet, "/api/nav", nil)
+	if _, err := route.Arguments(req, api.CommandRequest{}); err == nil {
+		t.Fatal("expected missing path query to fail")
+	}
+}
+
+func findAPICommandRoute(t *testing.T, path string) api.CommandRoute {
+	t.Helper()
+	for _, route := range buildAPICommandRoutes() {
+		if route.APIPath == path {
+			return route
+		}
+	}
+	t.Fatalf("route %s not found", path)
+	return api.CommandRoute{}
+}
+
+func contextWithRoute(req *http.Request, rctx *chi.Context) context.Context {
+	return context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 }

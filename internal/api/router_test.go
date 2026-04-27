@@ -122,7 +122,8 @@ func TestScalarDocsHandler(t *testing.T) {
 		},
 		CommandRoutes: []CommandRoute{
 			{
-				APIPath:     "/api/cli/version",
+				APIPath:     "/api/version",
+				Method:      http.MethodGet,
 				CommandPath: []string{"version"},
 				Summary:     "Show version information",
 			},
@@ -152,7 +153,7 @@ func TestScalarDocsHandler(t *testing.T) {
 	}
 }
 
-func TestGeneratedCommandEndpoint(t *testing.T) {
+func TestCuratedCommandEndpoint(t *testing.T) {
 	called := false
 	var gotPath []string
 	var gotArgs []string
@@ -163,9 +164,16 @@ func TestGeneratedCommandEndpoint(t *testing.T) {
 		},
 		CommandRoutes: []CommandRoute{
 			{
-				APIPath:     "/api/cli/version",
+				APIPath:     "/api/version",
+				Method:      http.MethodGet,
 				CommandPath: []string{"version"},
 				Summary:     "Show version information",
+				Arguments: func(r *http.Request, _ CommandRequest) ([]string, error) {
+					if r.URL.Query().Get("check") == "true" {
+						return []string{"--check"}, nil
+					}
+					return nil, nil
+				},
 			},
 		},
 		CommandRunner: func(_ context.Context, commandPath []string, arguments []string, stdout io.Writer, _ io.Writer) error {
@@ -181,7 +189,7 @@ func TestGeneratedCommandEndpoint(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/cli/version", strings.NewReader(`{"arguments":["--check"]}`))
+	req := httptest.NewRequest(http.MethodGet, "/api/version?check=true", nil)
 	router.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
@@ -206,14 +214,15 @@ func TestGeneratedCommandEndpoint(t *testing.T) {
 	}
 }
 
-func TestOpenAPIIncludesGeneratedCommandEndpoints(t *testing.T) {
+func TestOpenAPIIncludesCuratedCommandEndpoints(t *testing.T) {
 	router, err := NewRouter(ServerOptions{
 		ClientProvider: func() (Client, error) {
 			return stubClient{}, nil
 		},
 		CommandRoutes: []CommandRoute{
 			{
-				APIPath:     "/api/cli/version",
+				APIPath:     "/api/version",
+				Method:      http.MethodGet,
 				CommandPath: []string{"version"},
 				Summary:     "Show version information",
 			},
@@ -235,8 +244,21 @@ func TestOpenAPIIncludesGeneratedCommandEndpoints(t *testing.T) {
 	if !ok {
 		t.Fatalf("unexpected paths payload: %#v", payload["paths"])
 	}
-	if _, ok := paths["/api/cli/version"]; !ok {
-		t.Fatalf("expected generated command path, got %#v", paths)
+	if _, ok := paths["/api/version"]; !ok {
+		t.Fatalf("expected curated command path, got %#v", paths)
+	}
+	if _, ok := paths["/api/cli/version"]; ok {
+		t.Fatalf("legacy /api/cli path should not be documented: %#v", paths)
+	}
+	versionPath, ok := paths["/api/version"].(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected /api/version path shape: %#v", paths["/api/version"])
+	}
+	if _, ok := versionPath["get"]; !ok {
+		t.Fatalf("expected /api/version to document GET, got %#v", versionPath)
+	}
+	if _, ok := versionPath["post"]; ok {
+		t.Fatalf("expected /api/version not to document POST, got %#v", versionPath)
 	}
 }
 
