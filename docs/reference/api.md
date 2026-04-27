@@ -31,7 +31,7 @@ The raw OpenAPI document is available at:
 ## CLI command endpoints
 
 Non-interactive commands are exposed under `/api/cli/...` by default.
-Commands are only skipped when they are explicitly marked as CLI-only, for example shell completion generation and `serve`.
+Commands are only skipped when they are explicitly marked as CLI-only, for example shell completion generation, bootstrap token payloads, and `serve`.
 
 Examples:
 

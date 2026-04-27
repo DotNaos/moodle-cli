@@ -75,6 +75,9 @@ func TestLogsRouteUsesStreamingAPI(t *testing.T) {
 
 func TestAPIOptionalCommandsAreExplicitlyExcluded(t *testing.T) {
 	for _, excluded := range []string{
+		"bootstrap",
+		"bootstrap apply",
+		"bootstrap server",
 		"completion",
 		"completion bash",
 		"completion fish",

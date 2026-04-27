@@ -97,6 +97,10 @@ var bootstrapApplyCmd = &cobra.Command{
 }
 
 func init() {
+	markAPIOptional(bootstrapCmd)
+	markAPIOptional(bootstrapServerCmd)
+	markAPIOptional(bootstrapApplyCmd)
+
 	bootstrapServerCmd.Flags().BoolVar(&bootstrapCopy, "copy", false, "Copy the server install command to the clipboard")
 	bootstrapServerCmd.Flags().BoolVar(&bootstrapPrint, "print", false, "Print the server install command")
 	bootstrapServerCmd.Flags().StringVar(&bootstrapSchool, "school", "", "School id override")
