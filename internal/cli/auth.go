@@ -14,6 +14,12 @@ type sessionValidatingClient interface {
 	ValidateSession() error
 }
 
+type courseDataClient interface {
+	ValidateSession() error
+	FetchCourses() ([]moodle.Course, error)
+	FetchCourseResources(courseID string) ([]moodle.Resource, string, error)
+}
+
 var loginWithPlaywright = moodle.LoginWithPlaywright
 var runtimeLoginOverrides loginInputOverrides
 
@@ -52,6 +58,30 @@ func ensureAuthenticatedClient() (*moodle.Client, error) {
 	return moodleClient, nil
 }
 
+func ensureCourseDataClient() (courseDataClient, error) {
+	client, err := ensureAuthenticatedClient()
+	if err == nil {
+		return client, nil
+	}
+
+	session, loadErr := moodle.LoadMobileSession(opts.MobileSessionPath)
+	if loadErr != nil {
+		return nil, err
+	}
+	mobileClient, mobileErr := moodle.NewMobileClient(session, session.ResolvedSchoolID())
+	if mobileErr != nil {
+		return nil, mobileErr
+	}
+	if validateErr := mobileClient.ValidateSession(); validateErr != nil {
+		return nil, validateErr
+	}
+	return mobileClient, nil
+}
+
+func ensureAPIClient() (courseDataClient, error) {
+	return ensureCourseDataClient()
+}
+
 func ensureServeSession() error {
 	if runtimeLoginOverrides.any() {
 		school, username, password, err := resolveLoginInputs("", "", "")
@@ -65,7 +95,7 @@ func ensureServeSession() error {
 		return err
 	}
 
-	_, err := ensureAuthenticatedClient()
+	_, err := ensureCourseDataClient()
 	return err
 }
 

@@ -1,0 +1,28 @@
+# Bootstrap a server failure review
+
+I read [bootstrap-server.md](bootstrap-server.md) as if I knew nothing else about the project. These are the places where a user could get stuck, leak a secret, or install the wrong thing, with the doc fix that would make each step safer.
+
+## Local Mac
+
+- `Step 1, lines 7-13`: The tutorial says to run the command on a Mac where you already have a Moodle session or can log in, but it does not say how to confirm that the local session belongs to the right Moodle account or school. If the machine already has an old token, the command can generate a valid server install command for the wrong account. The doc should tell the user to check which account/site is active before bootstrapping, and to delete or replace `~/.moodle/mobile-session.json` if the wrong session is picked up. If this goes wrong, the recovery action should be to rerun bootstrap from the correct account and treat the old token as invalid.
+
+- `Step 1, lines 9-13`: `--copy` is convenient, but the clipboard is a weak place to hold a secret. On a Mac with clipboard managers, universal clipboard, screen sharing, or cloud sync, the generated command can leak outside the machine before it is pasted. The doc should warn that the copied command is sensitive, should be pasted immediately, and should not be left in a shared clipboard history. If the command is exposed, the recovery should be to generate a fresh bootstrap command and replace the server session instead of reusing the leaked one.
+
+- `Step 2, lines 15-19`: `--print` sounds harmless, but it puts the full install command, including the payload, into terminal output. A user could accidentally keep it in scrollback, paste it into chat, or record it in a terminal log. The doc should say to use `--print` only in a private local terminal and to avoid doing it during screen sharing or command capture. If it is printed somewhere unsafe, the recovery should be to discard that command and create a new payload from a trusted local machine.
+
+- `Step 3, lines 21-25`: The `--username` and `--password` example makes it easy to assume any shell variables will work, but the doc does not say that those values must already be present on the local Mac and should never be exposed in shell history or shared config files. A user could also paste empty variables and think the login flow is broken when the problem is just missing environment setup. The doc should say how to verify the variables are set, and it should recommend using a private local login method if the shell is shared. If the credentials are entered in the wrong place or for the wrong account, the recovery should be to clear the bad session and rerun the bootstrap step with the correct login.
+
+## Server install
+
+- `Step 4, lines 29-43`: The pasted installer is a `curl | bash` flow, so the server needs more than Docker in the abstract. It needs network access to `raw.githubusercontent.com` and `ghcr.io`, a working Docker daemon, and the command should be run as the final user, not as `root`, or the files will end up in the wrong home directory. The doc should say these prerequisites up front and warn that `sudo` is not the normal path. If the install fails halfway through, the recovery should be to fix Docker/network access, remove any broken `~/.local/bin/moodle` or partial `~/.moodle` state for that user, and rerun the command as the intended account.
+
+- `Step 4, lines 37-43`: The installer pulls `ghcr.io/dotnaos/moodle-cli:latest`, but the tutorial does not explain that `latest` can change over time or fail if that image is unavailable. A user may expect a stable version and later get a different build. The doc should explain whether the image is meant to be pinned or replaceable, and it should point out the `--image` override if a fixed tag or private registry is needed. If the wrong image is installed, the recovery should be to rerun the installer with the intended image and replace the wrapper command.
+
+- `Step 4, lines 35-43`: The install step writes files into the server user’s home directory and then verifies access with `moodle --json list courses`, but the doc does not say what to do if that verification fails after the files were created. The most likely failure is that the token is valid locally but the server cannot reach Moodle, or that the server user cannot execute the wrapper. The doc should give a recovery path: check network reachability first, then rerun the installer once Docker is healthy, and only then troubleshoot the token or account. If the bootstrap payload has been exposed during debugging, the safe recovery is to generate a new one.
+
+## Data folder
+
+- `Step 5, lines 45-53`: The data folder note is easy to misread as an implementation detail, but it is the long-term state for the server. If the user binds the wrong host path, uses a temporary directory, or shares that folder with the wrong account, they can lose the session or expose it to other users. The doc should say the directory must be persistent, writable by the same server user, and kept private. If the folder was mounted wrong, the recovery should be to stop the container, point it at the correct home directory, and migrate any old data before retrying.
+
+- `Step 5, lines 47-53`: The tutorial says the bootstrap payload contains a real Moodle mobile token, but it does not say what to do after accidental disclosure. The recovery should be explicit: assume the token is compromised, regenerate a new bootstrap payload from a trusted local machine, and replace the server install command and any copied logs or chat messages. Without that instruction, a user may keep using a leaked token and think the install is still safe.
+

@@ -16,7 +16,7 @@ var coursesCmd = &cobra.Command{
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client, err := ensureAuthenticatedClient()
+		client, err := ensureCourseDataClient()
 		if err != nil {
 			return err
 		}

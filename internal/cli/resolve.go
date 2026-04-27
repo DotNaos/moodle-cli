@@ -44,6 +44,17 @@ func resolveCourseIDWithOptions(client *moodle.Client, input string, options sel
 	return resolveCourseIDFromCoursesWithCurrent(courses, input, currentCourse)
 }
 
+func resolveCourseIDForCourseData(client courseDataClient, input string, options selectorOptions) (string, error) {
+	if webClient, ok := client.(*moodle.Client); ok {
+		return resolveCourseIDWithOptions(webClient, input, options)
+	}
+	courses, err := client.FetchCourses()
+	if err != nil {
+		return "", err
+	}
+	return resolveCourseIDFromCoursesWithCurrent(courses, input, nil)
+}
+
 func resolveCourseIDFromCoursesWithCurrent(courses []moodle.Course, input string, current *currentLectureCourse) (string, error) {
 	trimmed := strings.TrimSpace(input)
 	if trimmed == "" {

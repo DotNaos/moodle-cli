@@ -5,6 +5,7 @@ Use this folder when you already know what you want to do.
 ## Guides
 
 - [Run the API with Docker and a saved session](guides/run-api-with-docker-saved-session.md)
+- [Bootstrap a server with one command](guides/bootstrap-server.md)
 - [Run the API with Docker and a fresh login](guides/run-api-with-docker-throwaway.md)
 - [Run the API with Docker Compose](guides/run-api-with-docker-compose.md)
 - [Use the CLI locally](guides/install.md)

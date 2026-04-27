@@ -54,7 +54,7 @@ var serveCmd = &cobra.Command{
 
 		router, err := api.NewRouter(api.ServerOptions{
 			ClientProvider: func() (api.Client, error) {
-				return ensureAuthenticatedClient()
+				return ensureAPIClient()
 			},
 			CommandRoutes: buildAPICommandRoutes(),
 			CommandRunner: runAPICommand,
