@@ -8,6 +8,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const apiOptionalAnnotation = "apiOptional"
+
 func buildAPICommandRoutes() []api.CommandRoute {
 	routes := []api.CommandRoute{}
 	walkAPICommands(rootCmd, []string{}, &routes)
@@ -45,11 +47,14 @@ func shouldExposeCommandAsAPI(cmd *cobra.Command) bool {
 	if isInteractiveOnly(cmd) {
 		return false
 	}
+	if isAPIOptional(cmd) {
+		return false
+	}
 	return cmd.RunE != nil || cmd.Run != nil
 }
 
 func isStreamingAPICommandPath(commandPath []string) bool {
-	return len(commandPath) == 1 && (strings.EqualFold(commandPath[0], "serve") || strings.EqualFold(commandPath[0], "logs"))
+	return len(commandPath) == 1 && strings.EqualFold(commandPath[0], "logs")
 }
 
 func commandSummary(cmd *cobra.Command) string {
@@ -70,4 +75,21 @@ func commandDescription(cmd *cobra.Command) string {
 		return cmd.Long
 	}
 	return cmd.Short
+}
+
+func markAPIOptional(cmd *cobra.Command) {
+	if cmd == nil {
+		return
+	}
+	if cmd.Annotations == nil {
+		cmd.Annotations = map[string]string{}
+	}
+	cmd.Annotations[apiOptionalAnnotation] = "true"
+}
+
+func isAPIOptional(cmd *cobra.Command) bool {
+	if cmd == nil || cmd.Annotations == nil {
+		return false
+	}
+	return cmd.Annotations[apiOptionalAnnotation] == "true"
 }

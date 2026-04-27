@@ -30,7 +30,8 @@ The raw OpenAPI document is available at:
 
 ## CLI command endpoints
 
-Every non-interactive CLI command is also exposed under `/api/cli/...`.
+Non-interactive commands are exposed under `/api/cli/...` by default.
+Commands are only skipped when they are explicitly marked as CLI-only, for example shell completion generation and `serve`.
 
 Examples:
 
@@ -38,7 +39,6 @@ Examples:
 - `POST /api/cli/list/courses`
 - `POST /api/cli/config/show`
 - `POST /api/cli/open/course`
-- `POST /api/cli/completion/zsh`
 
 Send the remaining CLI arguments and flags in JSON:
 
