@@ -3,12 +3,13 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
 func TestMigrateLegacyHomeCopiesDataNonDestructively(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setTestHome(t, home)
 	t.Setenv("MOODLE_HOME", "")
 	t.Setenv("MOODLE_CLI_HOME", "")
 
@@ -44,7 +45,7 @@ func TestMigrateLegacyHomeCopiesDataNonDestructively(t *testing.T) {
 
 func TestMigrateLegacyHomeRefusesNonEmptyTarget(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setTestHome(t, home)
 	t.Setenv("MOODLE_HOME", "")
 	t.Setenv("MOODLE_CLI_HOME", "")
 
@@ -62,5 +63,15 @@ func TestMigrateLegacyHomeRefusesNonEmptyTarget(t *testing.T) {
 
 	if _, err := migrateLegacyHome(); err == nil {
 		t.Fatalf("expected non-empty target to fail")
+	}
+}
+
+func setTestHome(t *testing.T, home string) {
+	t.Helper()
+	t.Setenv("HOME", home)
+	if runtime.GOOS == "windows" {
+		t.Setenv("USERPROFILE", home)
+		t.Setenv("HOMEDRIVE", "")
+		t.Setenv("HOMEPATH", "")
 	}
 }

@@ -109,6 +109,8 @@ var serveCmd = &cobra.Command{
 }
 
 func init() {
+	markAPIOptional(serveCmd)
+
 	defaultAddr := ":8080"
 	if port := strings.TrimSpace(os.Getenv("PORT")); port != "" {
 		if strings.HasPrefix(port, ":") {

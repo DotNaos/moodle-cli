@@ -13,10 +13,12 @@ import (
 
 type CommandRoute struct {
 	APIPath     string
+	Method      string
 	CommandPath []string
 	Summary     string
 	Description string
 	Stream      bool
+	Arguments   func(*http.Request, CommandRequest) ([]string, error)
 }
 
 type CommandRequest struct {
@@ -32,7 +34,11 @@ func registerCommandRoutes(router interface {
 		return
 	}
 	for _, route := range opts.CommandRoutes {
-		router.MethodFunc(http.MethodPost, route.APIPath, commandHandler(opts.CommandRunner, route))
+		method := strings.TrimSpace(route.Method)
+		if method == "" {
+			method = http.MethodGet
+		}
+		router.MethodFunc(method, route.APIPath, commandHandler(opts.CommandRunner, route))
 	}
 }
 
@@ -43,12 +49,20 @@ func commandHandler(run CommandRunner, route CommandRoute) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
+		arguments := req.Arguments
+		if route.Arguments != nil {
+			arguments, err = route.Arguments(r, req)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, err)
+				return
+			}
+		}
 
 		if route.Stream {
-			executeStreamingCommand(w, r, run, route, req)
+			executeStreamingCommand(w, r, run, route, arguments)
 			return
 		}
-		executeBufferedCommand(w, r, run, route, req)
+		executeBufferedCommand(w, r, run, route, arguments)
 	}
 }
 
@@ -68,11 +82,11 @@ func decodeCommandRequest(body io.ReadCloser) (CommandRequest, error) {
 	return req, nil
 }
 
-func executeBufferedCommand(w http.ResponseWriter, r *http.Request, run CommandRunner, route CommandRoute, req CommandRequest) {
+func executeBufferedCommand(w http.ResponseWriter, r *http.Request, run CommandRunner, route CommandRoute, arguments []string) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	err := run(r.Context(), route.CommandPath, req.Arguments, &stdout, &stderr)
+	err := run(r.Context(), route.CommandPath, arguments, &stdout, &stderr)
 	payload := bytes.TrimSpace(stdout.Bytes())
 	if err == nil {
 		if len(payload) == 0 {
@@ -94,7 +108,7 @@ func executeBufferedCommand(w http.ResponseWriter, r *http.Request, run CommandR
 	writeError(w, http.StatusInternalServerError, errors.New(message))
 }
 
-func executeStreamingCommand(w http.ResponseWriter, r *http.Request, run CommandRunner, route CommandRoute, req CommandRequest) {
+func executeStreamingCommand(w http.ResponseWriter, r *http.Request, run CommandRunner, route CommandRoute, arguments []string) {
 	flusher, _ := w.(http.Flusher)
 	writer := &streamingResponseWriter{ResponseWriter: w, Flusher: flusher}
 	var stderr bytes.Buffer
@@ -107,7 +121,7 @@ func executeStreamingCommand(w http.ResponseWriter, r *http.Request, run Command
 		flusher.Flush()
 	}
 
-	err := run(r.Context(), route.CommandPath, req.Arguments, writer, &stderr)
+	err := run(r.Context(), route.CommandPath, arguments, writer, &stderr)
 	if err == nil {
 		return
 	}

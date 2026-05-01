@@ -2,12 +2,13 @@ package config
 
 import (
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
 func TestBaseDirDefaultsToSharedMoodleHome(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setTestHome(t, home)
 	t.Setenv("MOODLE_HOME", "")
 	t.Setenv("MOODLE_CLI_HOME", "")
 
@@ -17,28 +18,42 @@ func TestBaseDirDefaultsToSharedMoodleHome(t *testing.T) {
 }
 
 func TestBaseDirPrefersMoodleHome(t *testing.T) {
-	t.Setenv("MOODLE_HOME", "/tmp/moodle-home")
-	t.Setenv("MOODLE_CLI_HOME", "/tmp/legacy-home")
+	home := t.TempDir()
+	legacy := t.TempDir()
+	t.Setenv("MOODLE_HOME", home)
+	t.Setenv("MOODLE_CLI_HOME", legacy)
 
-	if got, want := BaseDir(), "/tmp/moodle-home"; got != want {
+	if got, want := BaseDir(), home; got != want {
 		t.Fatalf("BaseDir() = %q, want %q", got, want)
 	}
 }
 
 func TestBaseDirFallsBackToLegacyMoodleCLIHome(t *testing.T) {
+	legacy := t.TempDir()
 	t.Setenv("MOODLE_HOME", "")
-	t.Setenv("MOODLE_CLI_HOME", "/tmp/legacy-home")
+	t.Setenv("MOODLE_CLI_HOME", legacy)
 
-	if got, want := BaseDir(), "/tmp/legacy-home"; got != want {
+	if got, want := BaseDir(), legacy; got != want {
 		t.Fatalf("BaseDir() = %q, want %q", got, want)
 	}
 }
 
 func TestMobileSessionPathUsesBaseDir(t *testing.T) {
-	t.Setenv("MOODLE_HOME", "/tmp/moodle-home")
+	home := t.TempDir()
+	t.Setenv("MOODLE_HOME", home)
 	t.Setenv("MOODLE_CLI_HOME", "")
 
-	if got, want := MobileSessionPath(), "/tmp/moodle-home/mobile-session.json"; got != want {
+	if got, want := MobileSessionPath(), filepath.Join(home, "mobile-session.json"); got != want {
 		t.Fatalf("MobileSessionPath() = %q, want %q", got, want)
+	}
+}
+
+func setTestHome(t *testing.T, home string) {
+	t.Helper()
+	t.Setenv("HOME", home)
+	if runtime.GOOS == "windows" {
+		t.Setenv("USERPROFILE", home)
+		t.Setenv("HOMEDRIVE", "")
+		t.Setenv("HOMEPATH", "")
 	}
 }

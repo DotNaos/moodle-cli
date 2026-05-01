@@ -23,7 +23,7 @@ var completionCmd = &cobra.Command{
 }
 
 func newCompletionShellCmd(shell string, generator func(io.Writer) error) *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   shell,
 		Short: fmt.Sprintf("Generate the autocompletion script for %s", shell),
 		Args:  cobra.NoArgs,
@@ -45,9 +45,12 @@ func newCompletionShellCmd(shell string, generator func(io.Writer) error) *cobra
 			})
 		},
 	}
+	markAPIOptional(cmd)
+	return cmd
 }
 
 func init() {
+	markAPIOptional(completionCmd)
 	completionCmd.AddCommand(
 		newCompletionShellCmd("bash", func(w io.Writer) error {
 			return rootCmd.GenBashCompletionV2(w, true)

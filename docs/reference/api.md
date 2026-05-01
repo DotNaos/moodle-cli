@@ -25,28 +25,24 @@ The raw OpenAPI document is available at:
   Returns your enrolled courses as JSON.
 - `GET /api/courses/{courseID}/resources`
   Returns files and resources for one course as JSON.
-- `POST /api/cli/...`
-  Runs the matching non-interactive CLI command through the API.
+- `GET /api/courses/{courseID}/page`
+  Returns the course page as a reader-friendly text outline.
+- `GET /api/courses/{courseID}/resources/{resourceID}/text`
+  Returns extracted text for one file resource. Add `?raw=true` to skip PDF text cleanup.
+- `GET /api/timetable`
+  Returns timetable events from the configured calendar. Optional query parameters: `days`, `nextWeek`, `unique`.
+- `GET /api/current-lecture`
+  Returns today's current or next lecture, the matched course, and ranked materials. Optional query parameters: `workspace`, `at`.
+- `GET /api/nav?path=current`
+  Resolves a Moodle navigation path. Optional query parameters: `print`, `workspace`, `at`.
+- `GET /api/mobile/qr/inspect?link=<moodlemobile-link>`
+  Explains a Moodle mobile QR link without redeeming it.
+- `GET /api/version`
+  Returns the running CLI version metadata.
 
-## CLI command endpoints
+## Deliberately not exposed
 
-Every non-interactive CLI command is also exposed under `/api/cli/...`.
-
-Examples:
-
-- `POST /api/cli/version`
-- `POST /api/cli/list/courses`
-- `POST /api/cli/config/show`
-- `POST /api/cli/open/course`
-- `POST /api/cli/completion/zsh`
-
-Send the remaining CLI arguments and flags in JSON:
-
-```json
-{"arguments":["current","--open"]}
-```
-
-The command path itself is already part of the URL, so only send the extra arguments after it.
+The API is not a generic CLI mirror. Browser actions, local filesystem writes, token bootstrap, updating the binary, shell completion generation, and log streaming are intentionally not published as API endpoints.
 
 ## Quick check
 
@@ -55,8 +51,9 @@ open http://127.0.0.1:8080/docs
 curl http://127.0.0.1:8080/healthz
 curl http://127.0.0.1:8080/api/courses
 curl http://127.0.0.1:8080/api/courses/18236/resources
-curl -X POST http://127.0.0.1:8080/api/cli/version
-curl -X POST http://127.0.0.1:8080/api/cli/list/courses
+curl http://127.0.0.1:8080/api/courses/18236/page
+curl http://127.0.0.1:8080/api/timetable?days=30
+curl http://127.0.0.1:8080/api/version
 ```
 
 ## Error shape
