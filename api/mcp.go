@@ -20,6 +20,9 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 	service, apiKey, status, err := serviceFromRequest(r, cfg)
 	if err != nil {
+		if status == http.StatusUnauthorized {
+			setOAuthChallenge(w, r)
+		}
 		http.Error(w, err.Error(), status)
 		return
 	}
@@ -87,7 +90,12 @@ func serviceFromNewStore(r *http.Request, databaseURL string, apiKey string) (ch
 	if hashSecret == "" {
 		hashSecret = strings.TrimSpace(os.Getenv("APP_ENCRYPTION_KEY"))
 	}
-	credentials, err := store.MoodleCredentialsForAPIKey(r.Context(), apiKey, []byte(hashSecret))
+	var credentials svc.MoodleCredentials
+	if strings.HasPrefix(apiKey, svc.OAuthAccessTokenPrefix) {
+		credentials, err = store.MoodleCredentialsForOAuthAccessToken(r.Context(), apiKey, []byte(hashSecret))
+	} else {
+		credentials, err = store.MoodleCredentialsForAPIKey(r.Context(), apiKey, []byte(hashSecret))
+	}
 	if errors.Is(err, svc.ErrUnauthorized) {
 		return chatgptapp.Service{}, http.StatusUnauthorized, chatgptapp.ErrUnauthorized
 	}
@@ -117,4 +125,20 @@ func serviceFromNewStore(r *http.Request, databaseURL string, apiKey string) (ch
 		}
 	}
 	return chatgptapp.Service{Client: client, CalendarURL: calendarURL}, http.StatusOK, nil
+}
+
+func setOAuthChallenge(w http.ResponseWriter, r *http.Request) {
+	metadataURL := oauthBaseURL(r) + "/.well-known/oauth-protected-resource"
+	w.Header().Set("WWW-Authenticate", `Bearer resource_metadata="`+metadataURL+`", scope="moodle:read pdf:read calendar:read"`)
+}
+
+func oauthBaseURL(r *http.Request) string {
+	if configured := strings.TrimRight(strings.TrimSpace(os.Getenv("MOODLE_SERVICES_PUBLIC_URL")), "/"); configured != "" {
+		return configured
+	}
+	host := r.Host
+	if host == "" {
+		return "https://moodle-services.os-home.net"
+	}
+	return "https://" + host
 }

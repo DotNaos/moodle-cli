@@ -20,6 +20,8 @@ const (
 	EnvMobileSessionJSON = "MOODLE_MOBILE_SESSION_JSON"
 )
 
+const OAuthAccessTokenPrefix = "moodle_oauth_"
+
 type ServerEnv struct {
 	DatabaseURL   string
 	EncryptionKey string
@@ -92,7 +94,12 @@ func ServiceForRequest(r *http.Request, cfg ServerEnv) (Service, func(), error) 
 		return Service{}, nil, err
 	}
 	closeFn := func() { _ = st.Close() }
-	credentials, err := st.MoodleCredentialsForAPIKey(r.Context(), apiKey, cfg.HashSecret)
+	var credentials MoodleCredentials
+	if strings.HasPrefix(apiKey, OAuthAccessTokenPrefix) {
+		credentials, err = st.MoodleCredentialsForOAuthAccessToken(r.Context(), apiKey, cfg.HashSecret)
+	} else {
+		credentials, err = st.MoodleCredentialsForAPIKey(r.Context(), apiKey, cfg.HashSecret)
+	}
 	if err != nil {
 		closeFn()
 		return Service{}, nil, err
