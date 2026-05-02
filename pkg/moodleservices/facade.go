@@ -19,18 +19,24 @@ var (
 const ActiveSchoolID = moodle.ActiveSchoolID
 
 type (
-	APIKeyRecord             = store.APIKeyRecord
-	Box                      = appcrypto.Box
-	DataClient               = moodleservice.DataClient
-	MobileClient             = moodle.MobileClient
-	MobileQRLink             = moodle.MobileQRLink
-	MobileToken              = moodle.MobileToken
-	MobileSession            = moodle.MobileSession
-	MoodleCredentials        = store.MoodleCredentials
-	Service                  = moodleservice.Service
-	Store                    = store.Store
-	UpsertMoodleAccountInput = store.UpsertMoodleAccountInput
-	User                     = store.User
+	APIKeyRecord                      = store.APIKeyRecord
+	Box                               = appcrypto.Box
+	DataClient                        = moodleservice.DataClient
+	MobileClient                      = moodle.MobileClient
+	MobileQRLink                      = moodle.MobileQRLink
+	MobileToken                       = moodle.MobileToken
+	MobileSession                     = moodle.MobileSession
+	MoodleCredentials                 = store.MoodleCredentials
+	OAuthAuthorizationCode            = store.OAuthAuthorizationCode
+	OAuthClient                       = store.OAuthClient
+	OAuthToken                        = store.OAuthToken
+	CreateOAuthAuthorizationCodeInput = store.CreateOAuthAuthorizationCodeInput
+	CreateOAuthClientInput            = store.CreateOAuthClientInput
+	CreateOAuthTokenInput             = store.CreateOAuthTokenInput
+	Service                           = moodleservice.Service
+	Store                             = store.Store
+	UpsertMoodleAccountInput          = store.UpsertMoodleAccountInput
+	User                              = store.User
 )
 
 func APIKeyFromRequest(r *http.Request) string {
