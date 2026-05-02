@@ -9,6 +9,10 @@
       "destination": "/api/auth_qr_exchange"
     },
     {
+      "source": "/api/auth/clerk/qr/exchange",
+      "destination": "/api/auth_qr_exchange?clerk=1"
+    },
+    {
       "source": "/api/courses/:courseId/materials/:resourceId/text",
       "destination": "/api/material_text?courseId=:courseId&resourceId=:resourceId"
     },
