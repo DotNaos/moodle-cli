@@ -11,7 +11,7 @@ func OpenAPISpecJSON() []byte {
 			"description": "Private Moodle Services API for QR login, API keys, Moodle courses, materials, PDFs, calendar data, and ChatGPT MCP support.",
 		},
 		"servers": []any{
-			map[string]any{"url": "https://moodle-services.vercel.app"},
+			map[string]any{"url": "https://moodle-services.os-home.net"},
 		},
 		"components": map[string]any{
 			"securitySchemes": map[string]any{
