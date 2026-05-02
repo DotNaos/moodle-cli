@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/DotNaos/moodle-cli/internal/update"
-	ver "github.com/DotNaos/moodle-cli/internal/version"
+	"github.com/DotNaos/moodle-services/internal/update"
+	ver "github.com/DotNaos/moodle-services/internal/version"
 	"github.com/spf13/cobra"
 )
 

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DotNaos/moodle-cli/internal/moodle"
+	"github.com/DotNaos/moodle-services/internal/moodle"
 )
 
 func TestCleanExtractedTextWithTimeoutFallsBackToRaw(t *testing.T) {

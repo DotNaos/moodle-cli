@@ -12,7 +12,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/DotNaos/moodle-cli/skills"
+	"github.com/DotNaos/moodle-services/skills"
 	"github.com/spf13/cobra"
 )
 
@@ -37,8 +37,8 @@ var defaultSkillAgents = []string{"codex", "opencode", "claude-code", "gemini-cl
 
 var skillCmd = &cobra.Command{
 	Use:   "skill",
-	Short: "Show or install the moodle-cli skill",
-	Long:  "Print the bundled moodle-cli agent skill or install it via the vercel-labs 'skills' CLI.",
+	Short: "Show or install the Moodle Services skill",
+	Long:  "Print the bundled Moodle Services agent skill or install it via the vercel-labs 'skills' CLI.",
 	Args:  cobra.NoArgs,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return nil, cobra.ShellCompDirectiveNoFileComp
@@ -72,7 +72,7 @@ var skillCmd = &cobra.Command{
 				}
 			}
 			if result.Installed != nil {
-				if _, err := fmt.Fprintf(w, "\nInstalled moodle-cli skill to agents: %s\n", strings.Join(result.Installed.Agents, ", ")); err != nil {
+				if _, err := fmt.Fprintf(w, "\nInstalled Moodle Services skill to agents: %s\n", strings.Join(result.Installed.Agents, ", ")); err != nil {
 					return err
 				}
 				if _, err := fmt.Fprintf(w, "Source: %s\n", result.Installed.Source); err != nil {
@@ -85,7 +85,7 @@ var skillCmd = &cobra.Command{
 }
 
 func init() {
-	skillCmd.Flags().BoolVar(&skillInstall, "install", false, "Install the moodle-cli skill using 'npx skills add'")
+	skillCmd.Flags().BoolVar(&skillInstall, "install", false, "Install the Moodle Services skill using 'npx skills add'")
 	skillCmd.Flags().StringSliceVar(&skillInstallAgents, "agent", nil, "Target agents for skill install (default: codex, opencode, claude-code, gemini-cli)")
 }
 
@@ -131,7 +131,7 @@ func installEmbeddedSkill(ctx context.Context, stdout io.Writer, stderr io.Write
 
 	return &skillInstallResponse{
 		Agents: uniqueAgents,
-		Source: "embedded moodle-cli skill",
+		Source: "embedded Moodle Services skill",
 	}, nil
 }
 

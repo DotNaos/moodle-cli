@@ -280,12 +280,12 @@ jobs:
           bash packaging/macos/build-app.sh \
             --archive "dist/downloads/moodle_darwin_${{ matrix.arch }}.tar.gz" \
             --version "${{ needs.resolve-release.outputs.tag }}" \
-            --output "dist/installers/moodle-cli.app"
+            --output "dist/installers/moodle-services.app"
 
       - name: Sign app bundle contents
         if: env.MACOS_APPLICATION_SIGNING_IDENTITY != ''
         run: |
-          app_path="dist/installers/moodle-cli.app"
+          app_path="dist/installers/moodle-services.app"
           codesign --force --options runtime --timestamp \
             --keychain "${MACOS_SIGNING_KEYCHAIN}" \
             --sign "${MACOS_APPLICATION_SIGNING_IDENTITY}" \
@@ -294,7 +294,7 @@ jobs:
       - name: Sign app bundle
         if: env.MACOS_APPLICATION_SIGNING_IDENTITY != ''
         run: |
-          app_path="dist/installers/moodle-cli.app"
+          app_path="dist/installers/moodle-services.app"
           codesign --force --options runtime --timestamp \
             --keychain "${MACOS_SIGNING_KEYCHAIN}" \
             --sign "${MACOS_APPLICATION_SIGNING_IDENTITY}" \
@@ -306,7 +306,7 @@ jobs:
         if: env.MACOS_APPLICATION_SIGNING_IDENTITY != '' && env.MACOS_NOTARY_APPLE_ID != '' && env.MACOS_NOTARY_TEAM_ID != '' && env.MACOS_NOTARY_PASSWORD != ''
         continue-on-error: true
         run: |
-          app_path="dist/installers/moodle-cli.app"
+          app_path="dist/installers/moodle-services.app"
           zip_path="dist/installers/moodle_darwin_${{ matrix.arch }}.zip"
           ditto -c -k --keepParent "${app_path}" "${zip_path}"
           xcrun notarytool submit "${zip_path}" \
@@ -326,7 +326,7 @@ jobs:
           mkdir -p dist/installers
           bash packaging/macos/create-dmg.sh \
             --version "${{ needs.resolve-release.outputs.tag }}" \
-            --app "dist/installers/moodle-cli.app" \
+            --app "dist/installers/moodle-services.app" \
             --output "dist/installers/moodle_darwin_${{ matrix.arch }}.dmg"
 
       - name: Notarize DMG installer

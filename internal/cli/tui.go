@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	ver "github.com/DotNaos/moodle-cli/internal/version"
+	ver "github.com/DotNaos/moodle-services/internal/version"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"

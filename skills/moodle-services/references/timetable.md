@@ -1,6 +1,6 @@
 # Timetable (lectures)
 
-Use the Moodle CLI timetable command (alias: deadlines):
+Use the Moodle Services timetable command (alias: deadlines):
 - `moodle timetable --json`
 - Flags: `--days <n>`, `--next-week`, `--unique`
 

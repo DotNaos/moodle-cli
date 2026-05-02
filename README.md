@@ -1,12 +1,12 @@
-# Moodle CLI
+# Moodle Services
 
 <div align="center">
-<img src="assets/moodle_cli_icon.png" alt="moodle-cli icon" width="250" />
+<img src="assets/moodle_cli_icon.png" alt="Moodle Services icon" width="250" />
 </div>
 
 ## Index
 
-- [Moodle CLI](#moodle-cli)
+- [Moodle Services](#moodle-services)
   - [Index](#index)
   - [Abstract](#abstract)
   - [Getting started](#getting-started)
@@ -36,7 +36,7 @@ export MOODLE_PASSWORD="<password>"
 docker run --rm -p 8080:8080 \
   -e MOODLE_USERNAME="$MOODLE_USERNAME" \
   -e MOODLE_PASSWORD="$MOODLE_PASSWORD" \
-  ghcr.io/dotnaos/moodle-cli:latest serve --addr :8080
+  ghcr.io/dotnaos/moodle-services:latest serve --addr :8080
 ```
 
 3. Check that it is up.

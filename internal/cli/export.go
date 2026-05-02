@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/DotNaos/moodle-cli/internal/moodle"
+	"github.com/DotNaos/moodle-services/internal/moodle"
 	"github.com/spf13/cobra"
 )
 

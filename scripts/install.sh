@@ -2,7 +2,7 @@
 set -euo pipefail
 
 OWNER="DotNaos"
-REPO="moodle-cli"
+REPO="moodle-services"
 VERSION="${VERSION:-latest}"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 CHECKSUM_FILE="checksums.txt"

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DotNaos/moodle-cli/internal/moodle"
+	"github.com/DotNaos/moodle-services/internal/moodle"
 )
 
 func TestSelectCurrentLectureEventPrefersActive(t *testing.T) {

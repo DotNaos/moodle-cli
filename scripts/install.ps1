@@ -1,9 +1,9 @@
 $ErrorActionPreference = "Stop"
 
 $Owner = "DotNaos"
-$Repo = "moodle-cli"
+$Repo = "moodle-services"
 $Version = if ($env:VERSION) { $env:VERSION } else { "latest" }
-$InstallDir = if ($env:INSTALL_DIR) { $env:INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA "Programs\moodle-cli\bin" }
+$InstallDir = if ($env:INSTALL_DIR) { $env:INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA "Programs\moodle-services\bin" }
 $ChecksumFile = "checksums.txt"
 
 function Resolve-AssetName {

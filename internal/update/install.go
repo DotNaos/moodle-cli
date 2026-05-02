@@ -86,7 +86,7 @@ func (c *Client) downloadToFile(ctx context.Context, url string, path string) er
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", "moodle-cli updater")
+	req.Header.Set("User-Agent", "moodle-services updater")
 
 	resp, err := c.httpClient().Do(req)
 	if err != nil {

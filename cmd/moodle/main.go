@@ -1,13 +1,13 @@
 package main
 
 import (
-  "os"
+	"os"
 
-  "github.com/DotNaos/moodle-cli/internal/cli"
+	"github.com/DotNaos/moodle-services/internal/cli"
 )
 
 func main() {
-  if err := cli.Execute(); err != nil {
-    os.Exit(1)
-  }
+	if err := cli.Execute(); err != nil {
+		os.Exit(1)
+	}
 }

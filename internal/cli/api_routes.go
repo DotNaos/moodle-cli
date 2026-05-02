@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/DotNaos/moodle-cli/internal/api"
+	"github.com/DotNaos/moodle-services/internal/api"
 	"github.com/go-chi/chi/v5"
 	"github.com/spf13/cobra"
 )
@@ -19,7 +19,7 @@ func buildAPICommandRoutes() []api.CommandRoute {
 			Method:      http.MethodGet,
 			CommandPath: []string{"version"},
 			Summary:     "Show version information",
-			Description: "Returns the running moodle-cli version metadata.",
+			Description: "Returns the running Moodle Services version metadata.",
 		},
 		{
 			APIPath:     "/api/timetable",

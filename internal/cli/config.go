@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/DotNaos/moodle-cli/internal/config"
+	"github.com/DotNaos/moodle-services/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -32,7 +32,7 @@ type configMigrateHomeResult struct {
 var configCmd = &cobra.Command{
 	Use:     "config",
 	Short:   "Manage configuration (credentials, calendar, optional school override)",
-	Long:    "Show or set configuration values used by moodle-cli.\n\nUse 'config show' to inspect current values or 'config set' to update them.",
+	Long:    "Show or set configuration values used by Moodle Services.\n\nUse 'config show' to inspect current values or 'config set' to update them.",
 	Example: "  moodle config show\n  moodle config set --username you@example.com --password \"secret\"\n  moodle config set --calendar-url \"https://.../calendar.ics\"",
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return nil, cobra.ShellCompDirectiveNoFileComp

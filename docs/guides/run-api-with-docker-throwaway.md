@@ -8,7 +8,7 @@ Use this page when you want one container that logs in, serves the API, and then
 
 ```sh
 docker run --rm -p 8080:8080 \
-  ghcr.io/dotnaos/moodle-cli:latest serve --addr :8080 \
+  ghcr.io/dotnaos/moodle-services:latest serve --addr :8080 \
   --username "$MOODLE_USERNAME" \
   --password "$MOODLE_PASSWORD"
 ```
@@ -32,7 +32,7 @@ Use this when you prefer environment variables over flags:
 docker run --rm -p 8080:8080 \
   -e MOODLE_USERNAME="$MOODLE_USERNAME" \
   -e MOODLE_PASSWORD="$MOODLE_PASSWORD" \
-  ghcr.io/dotnaos/moodle-cli:latest serve --addr :8080
+  ghcr.io/dotnaos/moodle-services:latest serve --addr :8080
 ```
 
 If you want the session to survive across separate runs, continue in [Run the API with Docker and a saved session](run-api-with-docker-saved-session.md).

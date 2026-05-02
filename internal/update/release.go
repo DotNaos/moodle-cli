@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	ver "github.com/DotNaos/moodle-cli/internal/version"
+	ver "github.com/DotNaos/moodle-services/internal/version"
 )
 
 const (
 	DefaultOwner         = "DotNaos"
-	DefaultRepo          = "moodle-cli"
+	DefaultRepo          = "moodle-services"
 	DefaultCheckInterval = 24 * time.Hour
 )
 
@@ -62,7 +62,7 @@ func (c *Client) LatestRelease(ctx context.Context) (Release, error) {
 		return Release{}, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "moodle-cli update-check")
+	req.Header.Set("User-Agent", "moodle-services update-check")
 
 	resp, err := c.httpClient().Do(req)
 	if err != nil {

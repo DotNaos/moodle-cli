@@ -25,6 +25,7 @@ Use this folder when you already know what you want to do.
 
 ## Development
 
+- [Moodle Services roadmap](development/moodle-services-roadmap.md)
 - [Internals](development/internals.md)
 - [Architecture](development/architecture.md)
 - [Code structure](development/code-structure.md)

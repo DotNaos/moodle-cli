@@ -67,7 +67,7 @@ func extractPDFTextWithPdftotext(data []byte) (string, error) {
 		return "", fmt.Errorf("pdftotext not found in PATH")
 	}
 
-	tempDir, err := os.MkdirTemp("", "moodle-cli-pdftotext-*")
+	tempDir, err := os.MkdirTemp("", "moodle-services-pdftotext-*")
 	if err != nil {
 		return "", err
 	}
@@ -101,7 +101,7 @@ func extractPDFTextOCR(data []byte) (string, error) {
 		return "", fmt.Errorf("ocr dependency missing: tesseract not found in PATH")
 	}
 
-	tempDir, err := os.MkdirTemp("", "moodle-cli-ocr-*")
+	tempDir, err := os.MkdirTemp("", "moodle-services-ocr-*")
 	if err != nil {
 		return "", err
 	}

@@ -21,7 +21,7 @@ var logTailPollInterval = 500 * time.Millisecond
 
 var logsCmd = &cobra.Command{
 	Use:   "logs",
-	Short: "Tail moodle-cli debug or error logs",
+	Short: "Tail Moodle Services debug or error logs",
 	Long:  "Stream the CLI debug or error logs so agents and humans can inspect complete command events instead of raw line fragments.",
 	Args:  cobra.NoArgs,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {

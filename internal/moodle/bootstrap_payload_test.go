@@ -15,7 +15,7 @@ func TestBootstrapPayloadRoundTrip(t *testing.T) {
 		PrivateToken: "test-private-token",
 		CreatedAt:    time.Unix(100, 0).UTC(),
 	}
-	payload := NewBootstrapPayload(session, "ghcr.io/example/moodle-cli:test")
+	payload := NewBootstrapPayload(session, "ghcr.io/example/moodle-services:test")
 
 	encoded, err := EncodeBootstrapPayload(payload)
 	if err != nil {
