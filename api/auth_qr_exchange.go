@@ -3,23 +3,60 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"strings"
 
 	svc "github.com/DotNaos/moodle-services/pkg/moodleservices"
 )
 
+const internalWebSecretEnv = "MOODLE_WEB_INTERNAL_SECRET"
+
+type qrExchangeInput struct {
+	QR   string `json:"qr"`
+	Name string `json:"name"`
+}
+
 func AuthQrExchange(w http.ResponseWriter, r *http.Request) {
 	if !svc.AllowMethods(w, r, http.MethodPost) {
 		return
 	}
-	var input struct {
-		QR   string `json:"qr"`
-		Name string `json:"name"`
+	if r.URL.Query().Get("clerk") == "1" {
+		authClerkQRExchange(w, r)
+		return
 	}
+	var input qrExchangeInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		svc.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
 		return
 	}
+	exchangeAndPersistQR(w, r, input, "")
+}
+
+func authClerkQRExchange(w http.ResponseWriter, r *http.Request) {
+	expectedSecret := strings.TrimSpace(os.Getenv(internalWebSecretEnv))
+	if expectedSecret == "" {
+		svc.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": internalWebSecretEnv + " is not configured"})
+		return
+	}
+	providedSecret := strings.TrimSpace(r.Header.Get("X-Moodle-Internal-Secret"))
+	if !svc.ConstantTimeEqual(providedSecret, expectedSecret) {
+		svc.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+		return
+	}
+	clerkUserID := strings.TrimSpace(r.Header.Get("X-Clerk-User-Id"))
+	if clerkUserID == "" {
+		svc.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "Missing Clerk user id"})
+		return
+	}
+	var input qrExchangeInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		svc.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+		return
+	}
+	exchangeAndPersistQR(w, r, input, clerkUserID)
+}
+
+func exchangeAndPersistQR(w http.ResponseWriter, r *http.Request, input qrExchangeInput, clerkUserID string) {
 	link, err := svc.ParseMobileQRLink(input.QR)
 	if err != nil {
 		svc.WriteError(w, err)
@@ -72,6 +109,7 @@ func AuthQrExchange(w http.ResponseWriter, r *http.Request) {
 		SiteURL:                    session.SiteURL,
 		MoodleUserID:               session.UserID,
 		DisplayName:                displayName,
+		ClerkUserID:                clerkUserID,
 		SchoolID:                   session.SchoolID,
 		EncryptedMobileSessionJSON: encryptedSession,
 	})

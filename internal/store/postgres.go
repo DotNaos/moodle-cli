@@ -38,6 +38,7 @@ type UpsertMoodleAccountInput struct {
 	SiteURL                    string
 	MoodleUserID               int
 	DisplayName                string
+	ClerkUserID                string
 	SchoolID                   string
 	EncryptedMobileSessionJSON string
 }
@@ -85,17 +86,67 @@ func (s *Store) UpsertMoodleAccount(ctx context.Context, input UpsertMoodleAccou
 	defer func() { _ = tx.Rollback() }()
 
 	var user User
-	err = tx.QueryRowContext(ctx, `
-		insert into users (moodle_site_url, moodle_user_id, display_name)
-		values ($1, $2, $3)
-		on conflict (moodle_site_url, moodle_user_id)
-		do update set display_name = excluded.display_name, updated_at = now()
-		returning id::text, moodle_site_url, moodle_user_id, display_name
-	`, input.SiteURL, input.MoodleUserID, input.DisplayName).Scan(&user.ID, &user.MoodleSiteURL, &user.MoodleUserID, &user.DisplayName)
+	if input.ClerkUserID != "" {
+		err = tx.QueryRowContext(ctx, `
+			select id::text, moodle_site_url, moodle_user_id, display_name
+			from users
+			where clerk_user_id = $1
+		`, input.ClerkUserID).Scan(&user.ID, &user.MoodleSiteURL, &user.MoodleUserID, &user.DisplayName)
+		if errors.Is(err, sql.ErrNoRows) {
+			err = tx.QueryRowContext(ctx, `
+				insert into users (moodle_site_url, moodle_user_id, display_name, clerk_user_id)
+				values ($1, $2, $3, $4)
+				on conflict (moodle_site_url, moodle_user_id)
+				do update set
+					display_name = excluded.display_name,
+					clerk_user_id = excluded.clerk_user_id,
+					updated_at = now()
+				returning id::text, moodle_site_url, moodle_user_id, display_name
+			`, input.SiteURL, input.MoodleUserID, input.DisplayName, input.ClerkUserID).Scan(&user.ID, &user.MoodleSiteURL, &user.MoodleUserID, &user.DisplayName)
+		} else if err == nil {
+			err = tx.QueryRowContext(ctx, `
+				update users
+				set
+					moodle_site_url = $1,
+					moodle_user_id = $2,
+					display_name = $3,
+					updated_at = now()
+				where id = $4
+				returning id::text, moodle_site_url, moodle_user_id, display_name
+			`, input.SiteURL, input.MoodleUserID, input.DisplayName, user.ID).Scan(&user.ID, &user.MoodleSiteURL, &user.MoodleUserID, &user.DisplayName)
+		}
+	} else {
+		err = tx.QueryRowContext(ctx, `
+			insert into users (moodle_site_url, moodle_user_id, display_name)
+			values ($1, $2, $3)
+			on conflict (moodle_site_url, moodle_user_id)
+			do update set display_name = excluded.display_name, updated_at = now()
+			returning id::text, moodle_site_url, moodle_user_id, display_name
+		`, input.SiteURL, input.MoodleUserID, input.DisplayName).Scan(&user.ID, &user.MoodleSiteURL, &user.MoodleUserID, &user.DisplayName)
+	}
 	if err != nil {
 		return User{}, err
 	}
-
+	if input.ClerkUserID != "" {
+		_, err = tx.ExecContext(ctx, `
+			update users
+			set clerk_user_id = $1, updated_at = now()
+			where id = $2 and clerk_user_id is distinct from $1
+		`, input.ClerkUserID, user.ID)
+		if err != nil {
+			return User{}, err
+		}
+	}
+	if input.ClerkUserID != "" {
+		err = tx.QueryRowContext(ctx, `
+			select id::text, moodle_site_url, moodle_user_id, display_name
+			from users
+			where id = $1
+		`, user.ID).Scan(&user.ID, &user.MoodleSiteURL, &user.MoodleUserID, &user.DisplayName)
+		if err != nil {
+			return User{}, err
+		}
+	}
 	_, err = tx.ExecContext(ctx, `
 		insert into moodle_accounts (user_id, school_id, site_url, encrypted_mobile_session_json, token_last_validated_at)
 		values ($1, $2, $3, $4, now())
