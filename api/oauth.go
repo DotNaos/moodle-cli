@@ -157,8 +157,10 @@ func oauthAuthorize(w http.ResponseWriter, r *http.Request) {
 		webURL = "https://moodle.os-home.net"
 	}
 	target := webURL + "/oauth/authorize"
-	if r.URL.RawQuery != "" {
-		target += "?" + r.URL.RawQuery
+	query := r.URL.Query()
+	query.Del("route")
+	if encodedQuery := query.Encode(); encodedQuery != "" {
+		target += "?" + encodedQuery
 	}
 	http.Redirect(w, r, target, http.StatusFound)
 }
