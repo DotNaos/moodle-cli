@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DotNaos/moodle-cli/internal/api"
+	"github.com/DotNaos/moodle-services/internal/api"
 	"github.com/go-chi/chi/v5"
 )
 

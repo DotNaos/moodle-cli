@@ -129,6 +129,18 @@ func (c *Client) FetchMobileQRLink() (MobileQRLink, error) {
 }
 
 func (c *Client) ExchangeMobileQRToken(link MobileQRLink) (MobileToken, error) {
+	httpClient := c.http
+	if httpClient == nil {
+		httpClient = http.DefaultClient
+	}
+	return exchangeMobileQRToken(httpClient, link)
+}
+
+func ExchangeMobileQRToken(link MobileQRLink) (MobileToken, error) {
+	return exchangeMobileQRToken(http.DefaultClient, link)
+}
+
+func exchangeMobileQRToken(httpClient *http.Client, link MobileQRLink) (MobileToken, error) {
 	if !link.IsAutoLogin {
 		return MobileToken{}, fmt.Errorf("QR link does not contain an automatic login key")
 	}
@@ -147,9 +159,18 @@ func (c *Client) ExchangeMobileQRToken(link MobileQRLink) (MobileToken, error) {
 		},
 	}
 
-	resp, err := c.PostJSON(link.MobileTokenEndpoint(), payload, map[string]string{
-		"User-Agent": "Mozilla/5.0 MoodleMobile",
-	})
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return MobileToken{}, err
+	}
+	req, err := http.NewRequest(http.MethodPost, link.MobileTokenEndpoint(), bytes.NewReader(body))
+	if err != nil {
+		return MobileToken{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.Header.Set("User-Agent", "Mozilla/5.0 MoodleMobile")
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return MobileToken{}, err
 	}

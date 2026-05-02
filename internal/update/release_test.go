@@ -71,7 +71,7 @@ func TestNeedsUpdate(t *testing.T) {
 
 func TestLatestRelease(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/repos/DotNaos/moodle-cli/releases/latest" {
+		if r.URL.Path != "/repos/DotNaos/moodle-services/releases/latest" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -81,7 +81,7 @@ func TestLatestRelease(t *testing.T) {
 
 	client := &Client{
 		Owner:      "DotNaos",
-		Repo:       "moodle-cli",
+		Repo:       "moodle-services",
 		BaseURL:    server.URL,
 		HTTPClient: server.Client(),
 	}

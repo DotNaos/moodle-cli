@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DotNaos/moodle-cli/internal/moodle"
-	ver "github.com/DotNaos/moodle-cli/internal/version"
+	"github.com/DotNaos/moodle-services/internal/moodle"
+	ver "github.com/DotNaos/moodle-services/internal/version"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

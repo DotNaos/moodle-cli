@@ -1,0 +1,24 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/openapi.json",
+      "destination": "/api/openapi"
+    },
+    {
+      "source": "/api/auth/qr/exchange",
+      "destination": "/api/auth_qr_exchange"
+    },
+    {
+      "source": "/api/courses/:courseId/materials/:resourceId/text",
+      "destination": "/api/material_text?courseId=:courseId&resourceId=:resourceId"
+    },
+    {
+      "source": "/api/courses/:courseId/materials/:resourceId/pdf",
+      "destination": "/api/pdf?courseId=:courseId&resourceId=:resourceId"
+    },
+    {
+      "source": "/api/courses/:courseId/materials",
+      "destination": "/api/materials?courseId=:courseId"
+    }
+  ]
+}

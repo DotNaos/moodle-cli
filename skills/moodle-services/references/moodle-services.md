@@ -1,4 +1,4 @@
-# Moodle CLI reference
+# Moodle Services reference
 
 Use these commands when you need quick reminders or output paths.
 
@@ -14,13 +14,13 @@ Use these commands when you need quick reminders or output paths.
 - `moodle logs` (tail debug log; use `--error` for error log)
 
 ## Data locations (defaults)
-- Config: `~/.moodle-cli/config.json`
-- Session cookies: `~/.moodle-cli/session.json`
-- SQLite cache: `~/.moodle-cli/cache.db`
-- File cache: `~/.moodle-cli/files/`
+- Config: `~/.moodle/config.json`
+- Session cookies: `~/.moodle/session.json`
+- SQLite cache: `~/.moodle/cache.db`
+- File cache: `~/.moodle/files/`
 - Export: `~/Downloads/moodle/`
-- Debug log: `~/.moodle-cli/cli.log`
-- Error log: `~/.moodle-cli/error.log`
+- Debug log: `~/.moodle/cli.log`
+- Error log: `~/.moodle/error.log`
 
 ## Notes
 - Project status: scaffold in progress (see README).

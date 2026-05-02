@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-IMAGE="${MOODLE_DOCKER_IMAGE:-ghcr.io/dotnaos/moodle-cli:latest}"
+IMAGE="${MOODLE_DOCKER_IMAGE:-ghcr.io/dotnaos/moodle-services:latest}"
 PAYLOAD=""
 BIN_DIR="${HOME}/.local/bin"
 DATA_DIR="${HOME}/.moodle"
@@ -126,7 +126,7 @@ install_completion
 echo "Verifying Moodle access..."
 "${BIN_DIR}/moodle" --json list courses >/dev/null
 
-echo "Moodle CLI is installed."
+echo "Moodle Services is installed."
 echo "Wrapper: ${BIN_DIR}/moodle"
 echo "Data: ${DATA_DIR}"
 echo "Open a new shell if 'moodle' is not yet in PATH."

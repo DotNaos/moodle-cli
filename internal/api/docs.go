@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	ver "github.com/DotNaos/moodle-cli/internal/version"
+	ver "github.com/DotNaos/moodle-services/internal/version"
 )
 
 const (
@@ -19,7 +19,7 @@ var scalarPageTemplate = template.Must(template.New("scalar").Parse(`<!doctype h
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Moodle CLI API Reference</title>
+    <title>Moodle Services API Reference</title>
     <style>
       html, body, #app {
         height: 100%;
@@ -37,7 +37,7 @@ var scalarPageTemplate = template.Must(template.New("scalar").Parse(`<!doctype h
     <script>
       Scalar.createApiReference('#app', {
         url: {{ .OpenAPIPath }},
-        title: 'Moodle CLI API',
+        title: 'Moodle Services API',
       })
     </script>
   </body>
@@ -147,7 +147,7 @@ func openAPIDocument(r *http.Request, opts ServerOptions) map[string]any {
 	return map[string]any{
 		"openapi": "3.0.3",
 		"info": map[string]any{
-			"title":       "Moodle CLI API",
+			"title":       "Moodle Services API",
 			"version":     ver.Version(),
 			"description": "Local HTTP API exposed by `moodle serve`.",
 		},

@@ -3,7 +3,7 @@ package cli
 import (
 	"testing"
 
-	"github.com/DotNaos/moodle-cli/internal/moodle"
+	"github.com/DotNaos/moodle-services/internal/moodle"
 )
 
 func TestResolveCourseIDFromCoursesWithCurrentSupportsCurrentAndIndices(t *testing.T) {

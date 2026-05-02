@@ -3,6 +3,7 @@ package moodle
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -130,7 +131,7 @@ func (c *MobileClient) FetchCourseResources(courseID string) ([]Resource, string
 	for _, section := range sections {
 		sectionID := strconv.Itoa(section.ID)
 		for _, module := range section.Modules {
-			resource, ok := mobileModuleToResource(c.Session.SiteURL, courseID, sectionID, section.Name, module)
+			resource, ok := mobileModuleToResource(c.Session.SiteURL, c.Session.Token, courseID, sectionID, section.Name, module)
 			if ok {
 				resources = append(resources, resource)
 			}
@@ -145,6 +146,34 @@ func (c *MobileClient) FetchMobileSiteInfo() (MobileSiteInfo, error) {
 		return MobileSiteInfo{}, err
 	}
 	return info, nil
+}
+
+func (c *MobileClient) DownloadFileToBuffer(fileURL string) (DownloadResult, error) {
+	targetURL := addMobileTokenToFileURL(fileURL, c.Session.Token)
+	req, err := http.NewRequest(http.MethodGet, targetURL, nil)
+	if err != nil {
+		return DownloadResult{}, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 MoodleMobile")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return DownloadResult{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return DownloadResult{}, fmt.Errorf("mobile file download failed: %s (%s)", resp.Status, strings.TrimSpace(string(body)))
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return DownloadResult{}, err
+	}
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	return DownloadResult{Data: data, ContentType: contentType}, nil
 }
 
 func (c *MobileClient) callMobileAPI(function string, values url.Values, target any) error {
@@ -182,7 +211,7 @@ type mobileContent struct {
 	FileURL  string `json:"fileurl"`
 }
 
-func mobileModuleToResource(siteURL string, courseID string, sectionID string, sectionName string, module mobileModule) (Resource, bool) {
+func mobileModuleToResource(siteURL string, token string, courseID string, sectionID string, sectionName string, module mobileModule) (Resource, bool) {
 	if module.ModName == "label" || module.ID == 0 {
 		return Resource{}, false
 	}
@@ -195,16 +224,42 @@ func mobileModuleToResource(siteURL string, courseID string, sectionID string, s
 	}
 
 	fileType := inferMobileFileType(module)
+	resourceURL := firstNonEmpty(firstMobileFileURL(module, token), module.URL, strings.TrimRight(siteURL, "/")+"/mod/"+module.ModName+"/view.php?id="+strconv.Itoa(module.ID))
 	return Resource{
 		ID:          id,
 		Name:        strings.TrimSpace(module.Name),
-		URL:         firstNonEmpty(module.URL, strings.TrimRight(siteURL, "/")+"/mod/"+module.ModName+"/view.php?id="+strconv.Itoa(module.ID)),
+		URL:         resourceURL,
 		Type:        resourceType,
 		CourseID:    courseID,
 		SectionID:   sectionID,
 		SectionName: sectionName,
 		FileType:    fileType,
 	}, true
+}
+
+func firstMobileFileURL(module mobileModule, token string) string {
+	for _, content := range module.Contents {
+		if content.FileURL != "" {
+			return addMobileTokenToFileURL(content.FileURL, token)
+		}
+	}
+	return ""
+}
+
+func addMobileTokenToFileURL(fileURL string, token string) string {
+	if strings.TrimSpace(fileURL) == "" || strings.TrimSpace(token) == "" {
+		return fileURL
+	}
+	parsed, err := url.Parse(fileURL)
+	if err != nil {
+		return fileURL
+	}
+	query := parsed.Query()
+	if query.Get("token") == "" {
+		query.Set("token", token)
+	}
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
 }
 
 func inferMobileFileType(module mobileModule) string {

@@ -12,14 +12,14 @@ Use the same mounted folder in both runs:
 docker run --rm \
   -v ${HOME}/.moodle:/data \
   -e MOODLE_HOME=/data \
-  ghcr.io/dotnaos/moodle-cli:latest login \
+  ghcr.io/dotnaos/moodle-services:latest login \
   --username "$MOODLE_USERNAME" \
   --password "$MOODLE_PASSWORD"
 
 docker run --rm -p 8080:8080 \
   -v ${HOME}/.moodle:/data \
   -e MOODLE_HOME=/data \
-  ghcr.io/dotnaos/moodle-cli:latest serve --addr :8080
+  ghcr.io/dotnaos/moodle-services:latest serve --addr :8080
 ```
 
 ## I do not want to save a session at all
@@ -28,7 +28,7 @@ Start `serve` with a fresh login:
 
 ```sh
 docker run --rm -p 8080:8080 \
-  ghcr.io/dotnaos/moodle-cli:latest serve --addr :8080 \
+  ghcr.io/dotnaos/moodle-services:latest serve --addr :8080 \
   --username "$MOODLE_USERNAME" \
   --password "$MOODLE_PASSWORD"
 ```
@@ -41,7 +41,7 @@ Use this version:
 docker run --rm -p 8080:8080 \
   -e MOODLE_USERNAME="$MOODLE_USERNAME" \
   -e MOODLE_PASSWORD="$MOODLE_PASSWORD" \
-  ghcr.io/dotnaos/moodle-cli:latest serve --addr :8080
+  ghcr.io/dotnaos/moodle-services:latest serve --addr :8080
 ```
 
 ## I am using Docker Compose

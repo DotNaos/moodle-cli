@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/DotNaos/moodle-cli/internal/config"
+	"github.com/DotNaos/moodle-services/internal/config"
 	"github.com/spf13/cobra"
 )
 

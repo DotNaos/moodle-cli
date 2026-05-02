@@ -10,7 +10,7 @@ Use this page when you want separate `docker run` commands to share the same ses
 docker run --rm \
   -v ${HOME}/.moodle:/data \
   -e MOODLE_HOME=/data \
-  ghcr.io/dotnaos/moodle-cli:latest login \
+  ghcr.io/dotnaos/moodle-services:latest login \
   --username "$MOODLE_USERNAME" \
   --password "$MOODLE_PASSWORD"
 ```
@@ -21,7 +21,7 @@ docker run --rm \
 docker run --rm -p 8080:8080 \
   -v ${HOME}/.moodle:/data \
   -e MOODLE_HOME=/data \
-  ghcr.io/dotnaos/moodle-cli:latest serve --addr :8080
+  ghcr.io/dotnaos/moodle-services:latest serve --addr :8080
 ```
 
 3. Check that it is up.

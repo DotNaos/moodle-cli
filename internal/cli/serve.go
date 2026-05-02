@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/DotNaos/moodle-cli/internal/api"
+	"github.com/DotNaos/moodle-services/internal/api"
 	"github.com/spf13/cobra"
 )
 

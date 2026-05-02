@@ -1,7 +1,7 @@
 services:
     moodle-api:
         build: .
-        image: ghcr.io/dotnaos/moodle-cli:latest
+        image: ghcr.io/dotnaos/moodle-services:latest
         command: ['serve', '--addr', ':8080']
         environment:
             - PORT=8080

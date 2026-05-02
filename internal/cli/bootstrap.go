@@ -7,12 +7,12 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/DotNaos/moodle-cli/internal/moodle"
+	"github.com/DotNaos/moodle-services/internal/moodle"
 	"github.com/spf13/cobra"
 )
 
-const defaultDockerImage = "ghcr.io/dotnaos/moodle-cli:latest"
-const installDockerURL = "https://raw.githubusercontent.com/DotNaos/moodle-cli/main/scripts/install-docker.sh"
+const defaultDockerImage = "ghcr.io/dotnaos/moodle-services:latest"
+const installDockerURL = "https://raw.githubusercontent.com/DotNaos/moodle-services/main/scripts/install-docker.sh"
 
 var (
 	bootstrapCopy       bool

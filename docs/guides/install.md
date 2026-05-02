@@ -9,13 +9,13 @@ Use this page when you want the local `moodle` command instead of Docker.
 macOS / Linux:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/DotNaos/moodle-cli/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/DotNaos/moodle-services/main/scripts/install.sh | bash
 ```
 
 Windows PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/DotNaos/moodle-cli/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/DotNaos/moodle-services/main/scripts/install.ps1 | iex
 ```
 
 2. Open a new shell.
@@ -59,8 +59,8 @@ All release files are attached to the GitHub releases page.
 Use this when you want a local Go build:
 
 ```sh
-git clone https://github.com/DotNaos/moodle-cli.git
-cd moodle-cli
+git clone https://github.com/DotNaos/moodle-services.git
+cd moodle-services
 go install ./cmd/moodle
 ```
 

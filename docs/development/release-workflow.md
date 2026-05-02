@@ -11,7 +11,7 @@ Use this page when you want to know how stable releases and container images are
 ## Release outputs
 
 - Stable version tags such as `v0.1.11`
-- `ghcr.io/dotnaos/moodle-cli:latest`
+- `ghcr.io/dotnaos/moodle-services:latest`
 - Platform release files for macOS, Windows, and Linux
 
 ## Unstable channel
@@ -22,5 +22,5 @@ Pull requests can produce unstable builds for testing before merge.
 
 ```sh
 go test ./...
-docker build -t ghcr.io/dotnaos/moodle-cli .
+docker build -t ghcr.io/dotnaos/moodle-services .
 ```
